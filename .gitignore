@@ -5,3 +5,4 @@ pdkrom.vhd
 examples/test/test
 tools/bin2rom
 work-*.cf
+*.ghw

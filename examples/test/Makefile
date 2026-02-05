@@ -27,8 +27,8 @@ all: $(TESTBENCH)
 SOURCES=$(COREHDL) $(TESTBENCH).vhd pdkrom.vhd
 
 $(TESTBENCH): $(SOURCES)
-	$(GHDL) -i $(SOURCES)
-	$(GHDL) -m --ieee=synopsys -fexplicit $(TESTBENCH)
+	$(GHDL) -i --std=08 $(SOURCES)
+	$(GHDL) -m --std=08 -frelaxed --ieee=synopsys -fexplicit $(TESTBENCH)
 
 pdkrom.vhd: $(CSOURCE).bin
 	../../tools/bin2rom -t $(HDL)/pdkrom.vhd.in -i $(CSOURCE).bin -o pdkrom.vhd

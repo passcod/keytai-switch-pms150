@@ -1,5 +1,6 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.all;
+use std.env.stop;
 
 entity test is
 end entity test;
@@ -42,7 +43,8 @@ begin
   stim: process
   begin
     wait for 500 us;
-    report "Ending simulation" severity failure;
+    report "Ending simulation";
+    stop;
   end process;
 
 end sim;
