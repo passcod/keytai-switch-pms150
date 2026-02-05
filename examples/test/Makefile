@@ -13,6 +13,7 @@ COREHDL= $(HDL)/pdk14pkg.vhd \
 	$(HDL)/pdkport.vhd \
 	$(HDL)/pdkscaler.vhd \
 	$(HDL)/pdktim.vhd \
+	$(HDL)/pulsesync.vhd \
 	$(HDL)/pdkpwmg.vhd \
 	$(HDL)/pdkreg.vhd \
 	$(HDL)/txt_util.vhd \

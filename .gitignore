@@ -1,0 +1,7 @@
+*.o
+examples/test/testapp.*
+!examples/test/testapp.c
+pdkrom.vhd
+examples/test/test
+tools/bin2rom
+work-*.cf
