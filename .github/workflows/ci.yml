@@ -29,6 +29,7 @@ jobs:
         working-directory: examples/${{ matrix.example }}
         run: |
           make
+          ls -la
           ./test --wave=waveform.ghw
 
       - name: Upload waveform
