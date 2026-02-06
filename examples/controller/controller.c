@@ -148,8 +148,8 @@ static void protocol_exchange(void) {
     uint8_t i;
     uint8_t new_led = 0;
     
-    // Switch PA5 to output for transmission
-    pac |= (1 << PIN_DATA);
+    // PA5 is already output mode (set in init), just make sure it's low
+    pa &= ~(1 << PIN_DATA);
     
     // Send sync (4 beats low)
     send_sync();
@@ -184,6 +184,11 @@ static void protocol_exchange(void) {
     
     // Update PWM duty cycle
     tm2b = led_value;
+    
+    // Switch PA5 back to output mode, driving low (ready cleared)
+    pa &= ~(1 << PIN_DATA);
+    paph &= ~(1 << PIN_DATA);  // Disable pull-up
+    pac |= (1 << PIN_DATA);    // Output mode
 }
 
 // === Decode button value from comparator reading ===
@@ -205,7 +210,14 @@ static void decode_buttons(uint8_t comp_val) {
 void isr(void) __interrupt(0) {
     if (intrq & 0x01) {         // PA0 interrupt
         intrq &= ~0x01;         // Clear flag
+        
+        // Clear ready signal immediately (PA5 low, also start of data phase)
+        pa &= ~(1 << PIN_DATA);
+        
         protocol_exchange();
+        
+        // Clear any spurious interrupt flags from clock pulses during protocol
+        intrq &= ~0x01;
     }
 }
 
@@ -217,10 +229,14 @@ uint8_t _sdcc_external_startup(void) {
 
 // === Main ===
 void main(void) {
+    // Local variables for sampling (compared against cache)
+    uint8_t new_x, new_y, new_btn1, new_btn2;
+    uint8_t changed;
+    
     // Initialize ports
     pa = 0;
-    pac = (1 << PIN_PWM);       // PA3 output for PWM
-    paph = (1 << PIN_CLK) | (1 << PIN_DATA);  // Pull-ups on clock/data
+    pac = (1 << PIN_PWM) | (1 << PIN_DATA);  // PA3 output for PWM, PA5 output for ready signal (starts low)
+    paph = (1 << PIN_CLK);  // Pull-up on clock only (PA5 is output-driven now)
     
     // Initialize variables
     coord_x = 0;
@@ -245,13 +261,39 @@ void main(void) {
     
     // Main loop: continuously sample analog inputs
     while (1) {
-        // Sample coord_x from PA7
-        coord_x = sar_read_4bit(PIN_COMPN_X);
+        // Sample all channels into local variables first
+        new_x = sar_read_4bit(PIN_COMPN_X);
+        new_y = sar_read_4bit(PIN_COMPN_Y);
         
-        // Sample coord_y from PA6
-        coord_y = sar_read_4bit(PIN_COMPN_Y);
+        // Decode buttons into local variables
+        {
+            uint8_t comp_val = sar_read_4bit(PIN_COMPN_B);
+            if (comp_val < 5) {
+                new_btn1 = 0; new_btn2 = 0;
+            } else if (comp_val < 8) {
+                new_btn1 = 1; new_btn2 = 0;
+            } else if (comp_val < 11) {
+                new_btn1 = 0; new_btn2 = 1;
+            } else {
+                new_btn1 = 1; new_btn2 = 1;
+            }
+        }
         
-        // Sample buttons from PA4 and decode
-        decode_buttons(sar_read_4bit(PIN_COMPN_B));
+        // Check if any value changed
+        changed = (new_x != coord_x) || (new_y != coord_y) ||
+                  (new_btn1 != btn1) || (new_btn2 != btn2);
+        
+        if (changed) {
+            // Atomic update: disable interrupts during cache update
+            __asm__("disgint");
+            coord_x = new_x;
+            coord_y = new_y;
+            btn1 = new_btn1;
+            btn2 = new_btn2;
+            __asm__("engint");
+            
+            // Signal ready: set PA5 high (already output mode from init)
+            pa |= (1 << PIN_DATA);
+        }
     }
 }

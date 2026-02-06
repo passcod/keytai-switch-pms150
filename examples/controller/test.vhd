@@ -122,30 +122,37 @@ begin
     tb_pa0 <= '0';
     tb_pa5 <= 'Z';  -- Let DUT drive during its transmit phase
     
-    if DEBUG_ENABLED then
-      report "pa_s(0) = " & std_logic'image(pa_s(0));
+    -- Wait for DUT to initialize (PA5 starts undefined, needs time to stabilize)
+    wait for 100 us;
+    
+    -- =========================================================
+    -- TEST 1: Wait for ready signal, then exchange
+    -- =========================================================
+    report "=== TEST 1: Wait for PA5 ready signal ===";
+    
+    -- Wait for DUT to complete first sample cycle and signal ready (PA5 high)
+    report "Waiting for PA5 ready signal...";
+    wait until read_pa5(pa_s) = '1' for 2000 us;
+    
+    if read_pa5(pa_s) /= '1' then
+      report "TIMEOUT waiting for ready signal" severity warning;
+      stop;
     end if;
     
-    -- Let the system initialize and run SAR sampling
-    wait for 1200 us;  -- Allow at least one full SAR sample cycle (coord_x, coord_y, buttons) to complete
-    
-    if DEBUG_ENABLED then
-      report "After init, pa_s(0) = " & std_logic'image(pa_s(0));
-    end if;
+    report "PA5 ready signal detected, triggering exchange";
     
     -- Trigger protocol by pulsing PA0 (interrupt on rising edge)
-    report "Triggering protocol exchange";
     pulse_clock;
     
-    if DEBUG_ENABLED then
-      report "After trigger pulse, pa_s(0) = " & std_logic'image(pa_s(0));
-    end if;
-    
-    -- Wait for DUT to enter ISR and set PA5 as output
+    -- Wait for DUT to enter ISR and clear ready signal
     wait for 50 us;
     
+    -- Verify ready signal was cleared
+    if read_pa5(pa_s) = '1' then
+      report "WARNING: Ready signal not cleared after trigger" severity warning;
+    end if;
+    
     -- Clock through the sync pattern (3 more beats - trigger pulse counted as first)
-    report "Clocking sync pattern";
     for i in 0 to 2 loop
       pulse_clock;
     end loop;
@@ -153,9 +160,6 @@ begin
     -- Receive coord_x (4 bits, MSB first)
     for i in 3 downto 0 loop
       clock_high;
-      if DEBUG_ENABLED then
-        report "Sample coord_x[" & integer'image(i) & "] = pa_s(5)=" & std_logic'image(pa_s(5));
-      end if;
       captured_x(i) <= read_pa5(pa_s);
       clock_high_finish;
       clock_low;
@@ -186,11 +190,10 @@ begin
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
     -- Now DUT switches PA5 to input mode for reception
-    -- Wait for DUT to reconfigure
     wait for 20 us;
     
     -- Send sync pattern: drive PA5 low for 4 clock beats
-    tb_pa5 <= 'L';
+    tb_pa5 <= '0';
     for i in 0 to 3 loop
       pulse_clock;
     end loop;
@@ -198,35 +201,200 @@ begin
     -- Send LED value (8 bits, MSB first)
     for i in 7 downto 0 loop
       if LED_TO_SEND(i) = '1' then
-        tb_pa5 <= 'H';
+        tb_pa5 <= '1';
       else
-        tb_pa5 <= 'L';
+        tb_pa5 <= '0';
       end if;
       pulse_clock;
     end loop;
     
-    -- Release PA5
+    -- Release PA5 - DUT is now in output mode again
     tb_pa5 <= 'Z';
-    
-    -- Let DUT process and update PWM
     wait for 100 us;
     
-    -- Verify results
-    -- Note: SAR uses '>' comparison, so result is 1 less than input when input is exact power of 2
-    -- mock_coord_x = 10 (0xA), SAR gives 9 (since 10 is not > 10, final bit test fails)
-    -- mock_coord_y = 5 (0x5), SAR gives 4 (since 5 is not > 5, final bit test fails)
-    report "=== Test Results ===";
-    report "Expected coord_x=9 (SAR of 10), got " & integer'image(to_integer(unsigned(captured_x)));
-    report "Expected coord_y=4 (SAR of 5), got " & integer'image(to_integer(unsigned(captured_y)));
-    report "Expected btn1='1' btn2='0', got btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
-    
+    -- Check TEST 1 results
+    report "--- TEST 1 Results ---";
     if unsigned(captured_x) = 9 and unsigned(captured_y) = 4 and captured_btn1 = '1' and captured_btn2 = '0' then
-      report "TEST PASSED";
+      report "TEST 1 PASSED";
     else
-      report "TEST FAILED - values don't match expected" severity warning;
+      report "TEST 1 FAILED" severity warning;
     end if;
     
-    report "Test complete";
+    -- =========================================================
+    -- TEST 2: Poll without ready signal (no data change)
+    -- =========================================================
+    report "=== TEST 2: Poll without ready signal (stale data) ===";
+    
+    -- Mock values haven't changed, so DUT won't set ready flag
+    -- Wait briefly to confirm no ready signal
+    wait for 500 us;
+    
+    if read_pa5(pa_s) = '1' then
+      report "Unexpected ready signal (values should not have changed)";
+    else
+      report "No ready signal as expected, polling anyway...";
+    end if;
+    
+    -- Trigger protocol even without ready signal (master polling)
+    pulse_clock;
+    wait for 50 us;
+    
+    -- Clock through sync pattern
+    for i in 0 to 2 loop
+      pulse_clock;
+    end loop;
+    
+    -- Receive coord_x
+    for i in 3 downto 0 loop
+      clock_high;
+      captured_x(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    report "Captured coord_x: " & integer'image(to_integer(unsigned(captured_x)));
+    
+    -- Receive coord_y
+    for i in 3 downto 0 loop
+      clock_high;
+      captured_y(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    report "Captured coord_y: " & integer'image(to_integer(unsigned(captured_y)));
+    
+    -- Receive btn1, btn2
+    clock_high;
+    captured_btn1 <= read_pa5(pa_s);
+    clock_high_finish;
+    clock_low;
+    clock_high;
+    captured_btn2 <= read_pa5(pa_s);
+    clock_high_finish;
+    clock_low;
+    
+    report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
+    
+    -- Complete LED send phase
+    wait for 20 us;
+    tb_pa5 <= '0';
+    wait for 5 us;  -- Allow PA5 to propagate through synchronizer
+    for i in 0 to 3 loop
+      pulse_clock;
+    end loop;
+    for i in 7 downto 0 loop
+      if LED_TO_SEND(i) = '1' then
+        tb_pa5 <= '1';
+      else
+        tb_pa5 <= '0';
+      end if;
+      pulse_clock;
+    end loop;
+    tb_pa5 <= 'Z';
+    report "TEST 2 LED send complete";
+    wait for 500 us;  -- Give DUT time to finish ISR
+    
+    -- Check TEST 2 results (should get same values as TEST 1 - stale but consistent)
+    report "--- TEST 2 Results ---";
+    if unsigned(captured_x) = 9 and unsigned(captured_y) = 4 and captured_btn1 = '1' and captured_btn2 = '0' then
+      report "TEST 2 PASSED (stale data is consistent)";
+    else
+      report "TEST 2 FAILED" severity warning;
+    end if;
+    
+    -- =========================================================
+    -- TEST 3: Change mock values, verify ready signal fires
+    -- =========================================================
+    report "=== TEST 3: Change mock values, verify ready signal ===";
+    
+    -- Change mock values
+    mock_coord_x <= x"C";  -- 12
+    mock_coord_y <= x"3";  -- 3
+    mock_buttons <= x"B";  -- Should give btn1=0, btn2=1
+    
+    -- Wait for at least one complete SAR cycle to use new values
+    wait for 1000 us;
+    
+    -- Now wait for DUT to detect change and signal ready
+    report "Changed mock values, waiting for ready signal...";
+    wait until read_pa5(pa_s) = '1' for 2000 us;
+    
+    if read_pa5(pa_s) /= '1' then
+      report "TIMEOUT waiting for ready signal after value change" severity warning;
+      stop;
+    end if;
+    
+    report "Ready signal detected after value change";
+    
+    -- Exchange with new values
+    pulse_clock;
+    wait for 50 us;
+    
+    for i in 0 to 2 loop
+      pulse_clock;
+    end loop;
+    
+    for i in 3 downto 0 loop
+      clock_high;
+      captured_x(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    report "Captured coord_x: " & integer'image(to_integer(unsigned(captured_x)));
+    
+    for i in 3 downto 0 loop
+      clock_high;
+      captured_y(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    report "Captured coord_y: " & integer'image(to_integer(unsigned(captured_y)));
+    
+    clock_high;
+    captured_btn1 <= read_pa5(pa_s);
+    clock_high_finish;
+    clock_low;
+    clock_high;
+    captured_btn2 <= read_pa5(pa_s);
+    clock_high_finish;
+    clock_low;
+    
+    report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
+    
+    wait for 20 us;
+    tb_pa5 <= '0';
+    for i in 0 to 3 loop
+      pulse_clock;
+    end loop;
+    for i in 7 downto 0 loop
+      if LED_TO_SEND(i) = '1' then
+        tb_pa5 <= '1';
+      else
+        tb_pa5 <= '0';
+      end if;
+      pulse_clock;
+    end loop;
+    tb_pa5 <= 'Z';
+    wait for 100 us;
+    
+    -- Check TEST 3 results
+    -- mock_coord_x=12, SAR gives 11
+    -- mock_coord_y=3, SAR gives 2 (since 3 is not > 3 at final step)
+    -- mock_buttons=11, SAR gives 10, decode: 10 < 11 -> btn1=0, btn2=1
+    report "--- TEST 3 Results ---";
+    report "Expected coord_x=11 (SAR of 12), got " & integer'image(to_integer(unsigned(captured_x)));
+    report "Expected coord_y=2 (SAR of 3), got " & integer'image(to_integer(unsigned(captured_y)));
+    report "Expected btn1='0' btn2='1', got btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
+    
+    if unsigned(captured_x) = 11 and unsigned(captured_y) = 2 and captured_btn1 = '0' and captured_btn2 = '1' then
+      report "TEST 3 PASSED";
+    else
+      report "TEST 3 FAILED" severity warning;
+    end if;
+    
+    -- =========================================================
+    -- Final summary
+    -- =========================================================
+    report "=== All tests complete ===";
     stop;
   end process;
 
