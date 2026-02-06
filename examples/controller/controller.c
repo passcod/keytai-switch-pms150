@@ -265,17 +265,33 @@ void main(void) {
         new_x = sar_read_4bit(PIN_COMPN_X);
         new_y = sar_read_4bit(PIN_COMPN_Y);
         
-        // Decode buttons into local variables
+        // Fast 2-comparison button decode
+        // Circuit: R1=4.7k, R2=10k, Rgnd=10k gives SAR values 0, 7, 10, 12
+        // These fall in quadrants [0-3], [4-7], [8-11], [12-15]
         {
-            uint8_t comp_val = sar_read_4bit(PIN_COMPN_B);
-            if (comp_val < 5) {
-                new_btn1 = 0; new_btn2 = 0;
-            } else if (comp_val < 8) {
-                new_btn1 = 1; new_btn2 = 0;
-            } else if (comp_val < 11) {
-                new_btn1 = 0; new_btn2 = 1;
+            uint8_t high_half;
+            comp_select_input(PIN_COMPN_B);
+            
+            // First comparison: ref=8 splits into low/high pairs
+            comp_set_reference(8);
+            high_half = comp_read();
+            
+            if (high_half) {
+                // SAR >= 8: either BTN1 only (10) or both (12)
+                comp_set_reference(12);
+                if (comp_read()) {
+                    new_btn1 = 1; new_btn2 = 1;  // Both buttons (SAR 12)
+                } else {
+                    new_btn1 = 1; new_btn2 = 0;  // BTN1 only (SAR 10)
+                }
             } else {
-                new_btn1 = 1; new_btn2 = 1;
+                // SAR < 8: either none (0) or BTN2 only (7)
+                comp_set_reference(4);
+                if (comp_read()) {
+                    new_btn1 = 0; new_btn2 = 1;  // BTN2 only (SAR 7)
+                } else {
+                    new_btn1 = 0; new_btn2 = 0;  // No buttons (SAR 0)
+                }
             }
         }
         

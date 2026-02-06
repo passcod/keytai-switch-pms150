@@ -74,9 +74,30 @@ Total: 26 clock pulses per exchange.
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Single channel read | ~50 µs | 4-bit SAR, 4 comparisons |
-| Full sample cycle | ~600 µs | 3 channels × ~200 µs each |
-| Change detection latency | ~1000 µs | Worst case for all channels |
+| Coordinate read | ~50 µs | 4-bit SAR, 4 comparisons |
+| Button decode | ~25 µs | 2 comparisons only (optimized circuit) |
+| Full sample cycle | ~400 µs | 2 coord × ~150 µs + buttons ~100 µs |
+| Change detection latency | ~600 µs | Worst case for all channels |
+
+## Button Circuit
+
+Optimized for fast 2-comparison decode:
+
+```
+Vcc ─┬─ BTN1 ─ 4.7kΩ ─┬─ PA4 ─ 10kΩ ─ GND
+     └─ BTN2 ─ 10kΩ  ─┘
+```
+
+| State | Voltage | Quadrant | SAR Range |
+|-------|---------|----------|-----------|
+| No buttons | 0V | 0 | 0-3 |
+| BTN2 only | 1.65V | 1 | 4-7 |
+| BTN1 only | 2.25V | 2 | 8-11 |
+| Both | 2.48V | 3 | 12-15 |
+
+Decode algorithm:
+1. Compare at reference 8 → splits low (none, BTN2) vs high (BTN1, both)
+2. Compare at 4 or 12 → identifies exact state
 
 ## Data Encoding
 
@@ -88,14 +109,14 @@ Total: 26 clock pulses per exchange.
 
 ### Buttons
 
-Buttons are encoded as a single analog value on PA4, decoded by thresholds:
+Decoded via 2-comparison binary search (see Button Circuit above):
 
-| SAR Value | btn1 | btn2 |
-|-----------|------|------|
-| 0-4 | 0 | 0 |
-| 5-7 | 1 | 0 |
-| 8-10 | 0 | 1 |
-| 11-15 | 1 | 1 |
+| Quadrant | Comparator Value | btn1 | btn2 |
+|----------|------------------|------|------|
+| 0 (0-3) | No buttons | 0 | 0 |
+| 1 (4-7) | BTN2 only | 0 | 1 |
+| 2 (8-11) | BTN1 only | 1 | 0 |
+| 3 (12-15) | Both | 1 | 1 |
 
 ### LED Value
 

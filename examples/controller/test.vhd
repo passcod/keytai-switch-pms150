@@ -16,9 +16,11 @@ architecture sim of test is
   signal tb_pa5 : std_logic := 'Z';  -- Data driven by testbench during receive phase
   
   -- Mock comparator values
-  signal mock_coord_x     : unsigned(3 downto 0) := x"A";  -- Test value = 10
-  signal mock_coord_y     : unsigned(3 downto 0) := x"5";  -- Test value = 5
-  signal mock_buttons     : unsigned(3 downto 0) := x"7";  -- btn1=1, btn2=0
+  -- Button circuit: R1=4.7k (BTN1), R2=10k (BTN2), Rgnd=10k
+  -- SAR values: none=0, BTN2=7, BTN1=10, both=12
+  signal mock_coord_x     : unsigned(3 downto 0) := x"A";  -- Test value = 10, SAR gives 9
+  signal mock_coord_y     : unsigned(3 downto 0) := x"5";  -- Test value = 5, SAR gives 4
+  signal mock_buttons     : unsigned(3 downto 0) := x"B";  -- 11 -> BTN1 only (SAR 10, quadrant 2)
   
   -- Captured protocol data
   signal captured_x    : std_logic_vector(3 downto 0) := "0000";
@@ -307,9 +309,9 @@ begin
     report "=== TEST 3: Change mock values, verify ready signal ===";
     
     -- Change mock values
-    mock_coord_x <= x"C";  -- 12
-    mock_coord_y <= x"3";  -- 3
-    mock_buttons <= x"B";  -- Should give btn1=0, btn2=1
+    mock_coord_x <= x"C";  -- 12, SAR gives 11
+    mock_coord_y <= x"3";  -- 3, SAR gives 2
+    mock_buttons <= x"8";  -- 8 -> BTN2 only (quadrant 1: 4-7, compare at 8 gives 0, at 4 gives 1)
     
     -- Wait for at least one complete SAR cycle to use new values
     wait for 1000 us;
@@ -378,8 +380,8 @@ begin
     
     -- Check TEST 3 results
     -- mock_coord_x=12, SAR gives 11
-    -- mock_coord_y=3, SAR gives 2 (since 3 is not > 3 at final step)
-    -- mock_buttons=11, SAR gives 10, decode: 10 < 11 -> btn1=0, btn2=1
+    -- mock_coord_y=3, SAR gives 2
+    -- mock_buttons=8: compare at 8 -> false (8 is not > 8), compare at 4 -> true -> BTN2 only
     report "--- TEST 3 Results ---";
     report "Expected coord_x=11 (SAR of 12), got " & integer'image(to_integer(unsigned(captured_x)));
     report "Expected coord_y=2 (SAR of 3), got " & integer'image(to_integer(unsigned(captured_y)));
