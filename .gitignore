@@ -1,8 +1,11 @@
 *.o
 examples/test/testapp.*
 !examples/test/testapp.c
+examples/controller/controller.*
+!examples/controller/controller.c
 pdkrom.vhd
-examples/test/test
+examples/*/test
 tools/bin2rom
 work-*.cf
 *.ghw
+e~*.o

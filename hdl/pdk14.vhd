@@ -880,24 +880,37 @@ begin
 
 
           --unimpl := true;
-          when opcode_subam   => unimpl := true;
+          when opcode_subam   => temp := readMem(to_integer(dec.memaddr));
+                                  A <= perform_sub( temp, '0' );
           when opcode_addcam  => unimpl := true;
           when opcode_subcam  => unimpl := true;
-          when opcode_andam   => unimpl := true;
-          when opcode_oram    => unimpl := true;
-          when opcode_xoram   => unimpl := true;
+          when opcode_andam   => temp := readMem(to_integer(dec.memaddr));
+                                  assign_and_set_z( A and temp );
+          when opcode_oram    => temp := readMem(to_integer(dec.memaddr));
+                                  assign_and_set_z( A or temp );
+          when opcode_xoram   => temp := readMem(to_integer(dec.memaddr));
+                                  assign_and_set_z( A xor temp );
           when opcode_movam   => A <= readMem( to_integer(dec.memaddr) );
           when opcode_addcm   => unimpl := true;
           when opcode_subcm   => unimpl := true;
-          when opcode_izsnm   => unimpl := true;
-          when opcode_dzsnm   => unimpl := true;
+          when opcode_izsnm   => temp := readMem( to_integer(dec.memaddr) );
+                                  temp := temp + 1;
+                                  writeMem( to_integer(dec.memaddr), temp);
+                                  set_z(temp);
+          when opcode_dzsnm   => temp := readMem( to_integer(dec.memaddr) );
+                                  temp := temp - 1;
+                                  writeMem( to_integer(dec.memaddr), temp);
+                                  set_z(temp);
           when opcode_incm    =>  temp := readMem( to_integer(dec.memaddr) );
                                   writeMem( to_integer(dec.memaddr), temp + 1);
 
                                   --unimpl := true;
-          when opcode_decm    => unimpl := true;
+          when opcode_decm    => temp := readMem( to_integer(dec.memaddr) );
+                                  writeMem( to_integer(dec.memaddr), temp - 1);
           when opcode_clearm  => writeMem( to_integer(dec.memaddr), (others => '0'));
-          when opcode_xchm    =>  unimpl := true;
+          when opcode_xchm    => temp := readMem( to_integer(dec.memaddr) );
+                                  writeMem( to_integer(dec.memaddr), A);
+                                  A <= temp;
           when opcode_notm    =>  unimpl := true;
           when opcode_negm    =>  unimpl := true;
           when opcode_srm     =>  temp := readMem(to_integer(dec.memaddr));
