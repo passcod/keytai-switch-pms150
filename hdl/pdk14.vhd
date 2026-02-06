@@ -50,7 +50,11 @@ entity pdk14 is
     PA_io   : inout std_logic_vector(7 downto 0);
     PB_io   : inout std_logic_vector(7 downto 0);
     -- Special pins with analog behaviour.
-    eosc_i  : in std_logic := 'X' -- External oscillator (not crystal).
+    eosc_i  : in std_logic := 'X'; -- External oscillator (not crystal).
+    -- Analog inputs for comparator simulation (4-bit value representing voltage level 0-15)
+    comp_pa4_i : in unsigned(3 downto 0) := x"0";  -- Analog value on PA4
+    comp_pa6_i : in unsigned(3 downto 0) := x"0";  -- Analog value on PA6
+    comp_pa7_i : in unsigned(3 downto 0) := x"0"   -- Analog value on PA7
   );
 end entity pdk14;
 
@@ -132,6 +136,7 @@ architecture sim of pdk14 is
   signal TM3CT_s          : wordtype;
   signal TM3S_s           : wordtype;
   signal GPCC             : wordtype;
+  signal gpcc_reg_s       : wordtype;  -- GPCC register value (without comparison result)
   signal GPCS             : wordtype;
   signal PWMG0C_s         : wordtype;
   signal PWMG0S_s         : wordtype;
@@ -260,6 +265,50 @@ begin
 
   MISCinst: entity work.pdkreg generic map ( NAME => "MISC" )
     port map ( clk_i => sysclk_s, rst_i => rst_s, dat_i => sfr_wdata, mask_i => sfr_wmask, wen_i => sfr_wen(8), dat_o => MISC_s );
+
+  -- Comparator registers
+  GPCSinst: entity work.pdkreg generic map ( NAME => "GPCS" )
+    port map ( clk_i => sysclk_s, rst_i => rst_s, dat_i => sfr_wdata, mask_i => sfr_wmask, wen_i => sfr_wen(25), dat_o => GPCS );
+
+  -- GPCC register (bits 7,6,5 and 3:0 are writable, bit 4 is read-only comparison result)
+  GPCCinst: entity work.pdkreg generic map ( NAME => "GPCC" )
+    port map ( clk_i => sysclk_s, rst_i => rst_s, dat_i => sfr_wdata, mask_i => sfr_wmask, wen_i => sfr_wen(24), dat_o => gpcc_reg_s );
+
+  -- Combinational comparator logic
+  gpcc_cmp: process(all)
+    variable comp_input : unsigned(3 downto 0);
+    variable comp_ref : unsigned(3 downto 0);
+    variable comp_result : std_logic;
+  begin
+    -- Select comparator input based on GPCS
+    case to_integer(GPCS(2 downto 0)) is
+      when 1 => comp_input := comp_pa7_i;      -- PA7
+      when 2 => comp_input := comp_pa6_i;      -- PA6
+      when 3 => comp_input := comp_pa4_i;      -- PA4
+      when others => comp_input := x"0";
+    end case;
+    
+    -- Reference level from GPCC bits 3:0
+    comp_ref := unsigned(gpcc_reg_s(3 downto 0));
+    
+    -- Comparator result: 1 if input > reference
+    if comp_input > comp_ref then
+      comp_result := '1';
+    else
+      comp_result := '0';
+    end if;
+    
+    -- Debug output (disabled for now - too verbose in combinational process)
+    --if DEBUG_ENABLED then
+    --  report "COMP: GPCS=" & integer'image(to_integer(GPCS)) &
+    --         " input=" & integer'image(to_integer(comp_input)) &
+    --         " ref=" & integer'image(to_integer(comp_ref)) &
+    --         " result=" & std_logic'image(comp_result);
+    --end if;
+    
+    -- GPCC output: combine register with comparison result in bit 4
+    GPCC <= gpcc_reg_s(7 downto 5) & comp_result & gpcc_reg_s(3 downto 0);
+  end process;
 
 
   -- Ports

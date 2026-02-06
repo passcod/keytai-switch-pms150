@@ -31,7 +31,7 @@ architecture sim of test is
   signal led_to_send : std_logic_vector(7 downto 0) := x"A5";
 
   constant CLK_PERIOD : time := 10 us;  -- 100 kHz external clock
-  constant DEBUG_ENABLED: boolean := true;
+  constant DEBUG_ENABLED: boolean := false;
 
 begin
 
@@ -42,7 +42,11 @@ begin
     )
     port map (
       PA_io => pa_s,
-      PB_io => pb_s
+      PB_io => pb_s,
+      -- Mock analog inputs for comparator
+      comp_pa7_i => mock_coord_x,   -- PA7 = coord_x
+      comp_pa6_i => mock_coord_y,   -- PA6 = coord_y
+      comp_pa4_i => mock_buttons    -- PA4 = buttons
     );
 
   -- Drive PA0 with external clock

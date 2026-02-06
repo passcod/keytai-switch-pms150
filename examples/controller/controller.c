@@ -28,8 +28,8 @@ __sfr __at(0x17) tm2s;
 __sfr __at(0x09) tm2b;
 
 // Comparator
-__sfr __at(0x1a) gpcc;      // comparator control
-__sfr __at(0x1b) gpcs;      // comparator select
+__sfr __at(0x18) gpcc;      // comparator control
+__sfr __at(0x19) gpcs;      // comparator select
 
 // === Pin definitions ===
 #define PIN_CLK     0       // PA0 - clock input
@@ -81,9 +81,11 @@ static uint8_t sar_read_4bit(uint8_t input_pin) {
         comp_set_reference(result | bit);
         // Small delay for comparator to settle
         __asm__("nop\nnop\nnop\nnop");
-        if (!comp_read()) {
+        if (comp_read()) {
+            // Input > reference, keep the bit set
             result |= bit;
         }
+        // If input <= reference, don't set the bit (try lower value)
     }
     return result & 0x0F;
 }
