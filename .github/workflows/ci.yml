@@ -9,6 +9,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example: [test, controller]
 
     steps:
       - name: Checkout
@@ -19,26 +22,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ghdl sdcc binutils
 
-      - name: Build and run test example
-        working-directory: examples/test
+      - name: Build bin2rom tool
+        run: make -C tools
+
+      - name: Build and run ${{ matrix.example }} example
+        working-directory: examples/${{ matrix.example }}
         run: |
           make
           ./test --wave=waveform.ghw
 
-      - name: Build and run controller example
-        working-directory: examples/controller
-        run: |
-          make
-          ./test --wave=waveform.ghw
-
-      - name: Upload test waveform
+      - name: Upload waveform
         uses: actions/upload-artifact@v6
         with:
-          name: test-waveform
-          path: examples/test/waveform.ghw
-
-      - name: Upload controller waveform
-        uses: actions/upload-artifact@v6
-        with:
-          name: controller-waveform
-          path: examples/controller/waveform.ghw
+          name: ${{ matrix.example }}-waveform
+          path: examples/${{ matrix.example }}/waveform.ghw

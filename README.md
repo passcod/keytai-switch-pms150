@@ -1,42 +1,69 @@
-------- VHDL FPPA PDK simulation model ------
+# VHDL FPPA PDK Simulation Model
 
-This project aims to provide a fully functional, timing accurate VHDL model for
-simulating PAKAUK FPPA microcontrollers.
+A fully functional, timing accurate VHDL model for simulating Padauk FPPA microcontrollers.
 
-It is still a work in progress.
+## Status
 
-Current cores implemented:
+| Core | Chips | Status |
+|------|-------|--------|
+| PDK14 | PFS154 | ✅ Supported |
+| PDK13 | PMS150C | 🚧 Planned |
 
-	PDK14
+### Supported Features
 
-Current chips supported:
+- Full instruction set (including extended instructions: `oram`, `andam`, `xoram`, `subam`, `decm`, `izsnm`, `dzsnm`, `xchm`)
+- GPIO with configurable pull-ups
+- Timers (TM2, TM3)
+- PWM output (PWMG)
+- External interrupts
+- Comparator with programmable reference (for SAR ADC simulation)
 
-	PFS154
+## Requirements
 
--------------------------------- Open questions ----------------------------------
+- [GHDL](https://github.com/ghdl/ghdl) - VHDL simulator
+- [SDCC](https://sdcc.sourceforge.net/) - C compiler with PDK support
+- `binutils` (for `objcopy`)
+- [GTKWave](http://gtkwave.sourceforge.net/) (optional, for viewing waveforms)
 
-The following questions are yet to be answered:
+## Building
 
-Q1: Is a "T" cycle a clock cycle, or do instructions take 2 clocks to execute ?
-    The fact that CPU sysclk is at most IHRC/2 seems to point in this direction,
-    however it can also be provided by ILRC and EOSC without a "divider". As of
-    now this prevents implementation of the design (only simulation supported).
-    Some suggest that there might be a PLL inside the chip.
-    
-Q2: What is the priority for alternate functions on pins ? For example, on PFS154
-    PA3 can either be GPIO, TM2PWM or PG2PWM. It is known that GPIO has the 
-    lowest priority, but if both TIM2 and PWMG2 are configured for PA3 output, 
-    which one gets outputted ? This can be found out by testing a physical chip.
-    
-Q3: How are inputs synchronized ? For GPIO the design currently uses 2 FF's 
-    clocked by sysclk, but actual implementation is unknown. The synchronization
-    is mandatory to avoid metastability issues.
-    
-Q4: How exactly are registers synchronized between the diverse clock domains ?
-    What is the delay between, let's say, setting PWM0GC.4 and actually resetting
-    the PWM counter?
-    
-Q5: When switching clocks across the chip, how is the clock output handled to 
-    avoid narrow pulses thay might occur ? As of now, a simple multiplexer is 
-    used for simulation.
+First, build the `bin2rom` tool:
+
+```bash
+cd tools
+make
+```
+
+Then build and run an example:
+
+```bash
+cd examples/test
+make
+./test --wave=waveform.ghw
+```
+
+View waveforms with GTKWave:
+
+```bash
+gtkwave waveform.ghw
+```
+
+## Examples
+
+- **[test](examples/test/)** - Basic test demonstrating PWM output and timers
+- **[controller](examples/controller/)** - Bitbanged protocol with SAR ADC for analog inputs, change detection, and interrupt-driven communication
+
+## Open Questions
+
+These implementation details are not fully documented by Padauk:
+
+1. **T-cycle timing**: Is a "T" cycle a clock cycle, or do instructions take 2 clocks? The CPU sysclk is at most IHRC/2, but can also use ILRC and EOSC without a divider.
+
+2. **Pin alternate function priority**: When multiple peripherals are configured for the same pin (e.g., TM2PWM and PG2PWM on PA3), which takes priority?
+
+3. **Input synchronization**: GPIO inputs use 2 FFs clocked by sysclk to avoid metastability, but the actual implementation is unknown.
+
+4. **Cross-domain register sync**: What is the delay between setting a register (e.g., PWM0GC.4) and the peripheral responding?
+
+5. **Clock switching glitches**: How are narrow pulses avoided when switching clocks? Currently uses a simple multiplexer.
 
