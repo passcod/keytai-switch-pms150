@@ -9,7 +9,6 @@ end entity test;
 architecture sim of test is
 
   signal pa_s : std_logic_vector(7 downto 0);
-  signal pb_s : std_logic_vector(7 downto 0);
 
   -- Directly controllable test signals
   signal tb_pa0 : std_logic := 'L';  -- Clock driven by testbench (active-high pulses)
@@ -46,14 +45,13 @@ architecture sim of test is
 
 begin
 
-  -- DUT instantiation
-  dut: entity work.pdk14
+  -- DUT instantiation (PMS150C - PDK13, no Port B)
+  dut: entity work.pdk13
     generic map (
       DEBUG_ENABLED => DEBUG_ENABLED
     )
     port map (
       PA_io => pa_s,
-      PB_io => pb_s,
       -- Mock analog inputs for comparator
       comp_pa7_i => mock_coord_x,   -- PA7 = coord_x
       comp_pa6_i => mock_coord_y,   -- PA6 = coord_y

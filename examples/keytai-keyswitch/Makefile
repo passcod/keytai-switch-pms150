@@ -1,24 +1,23 @@
 TESTBENCH=test
-CSOURCE=controller
+CSOURCE=firmware
 
 GHDL?=ghdl
 SDCC?=sdcc
-SDCC_CFLAGS=-mpdk14 --opt-code-size --fomit-frame-pointer --fverbose-asm --i-code-in-asm
+SDCC_CFLAGS=-mpdk13 --opt-code-size --fomit-frame-pointer --fverbose-asm --i-code-in-asm
 
 HDL=../../hdl
 
-COREHDL= $(HDL)/pdk14pkg.vhd \
+COREHDL= $(HDL)/pdk13pkg.vhd \
 	$(HDL)/pdkclock.vhd \
 	$(HDL)/pdkport.vhd \
 	$(HDL)/pdkscaler.vhd \
 	$(HDL)/pdktim.vhd \
 	$(HDL)/pulsesync.vhd \
-	$(HDL)/pdkpwmg.vhd \
 	$(HDL)/pdkreg.vhd \
 	$(HDL)/txt_util.vhd \
 	$(HDL)/measperiod.vhd \
-	$(HDL)/pdk14decode.vhd \
-	$(HDL)/pdk14.vhd \
+	$(HDL)/pdk13decode.vhd \
+	$(HDL)/pdk13.vhd \
 	$(HDL)/pdkpkg.vhd
 
 all: $(TESTBENCH)

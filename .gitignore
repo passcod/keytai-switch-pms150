@@ -1,8 +1,8 @@
 *.o
-examples/test/testapp.*
-!examples/test/testapp.c
-examples/controller/controller.*
-!examples/controller/controller.c
+examples/pfs154/testapp.*
+!examples/pfs154/testapp.c
+examples/keytai-keyswitch/firmware.*
+!examples/keytai-keyswitch/firmware.c
 examples/pms150c/testapp.*
 !examples/pms150c/testapp.c
 pdkrom.vhd

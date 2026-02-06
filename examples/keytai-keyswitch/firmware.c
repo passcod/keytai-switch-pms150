@@ -1,9 +1,9 @@
 // Controller for bitbanged protocol with comparator-based analog reads
-// Target: PFS154 (PDK14) - adaptable to PMS150C (PDK13)
+// Target: PMS150C (PDK13)
 
 #include <stdint.h>
 
-// === Register definitions (PFS154) ===
+// === Register definitions (PMS150C - PDK13) ===
 __sfr __at(0x00) flag;
 __sfr __at(0x02) sp;
 __sfr __at(0x03) clkmd;
@@ -12,15 +12,10 @@ __sfr __at(0x05) intrq;
 __sfr __at(0x0c) integs;
 __sfr __at(0x0d) padier;
 
-// Port A
+// Port A (PMS150C has only Port A)
 __sfr __at(0x10) pa;
 __sfr __at(0x11) pac;       // direction: 1=output
 __sfr __at(0x12) paph;      // pull-up
-
-// Port B
-__sfr __at(0x14) pb;
-__sfr __at(0x15) pbc;
-__sfr __at(0x16) pbph;
 
 // Timer2 (PWM)
 __sfr __at(0x1c) tm2c;

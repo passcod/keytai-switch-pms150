@@ -60,9 +60,9 @@ gtkwave waveform.ghw
 
 ## Examples
 
-- **[test](examples/test/)** - Basic PDK14 test demonstrating PWM output and timers
-- **[controller](examples/controller/)** - PDK14 bitbanged protocol with SAR ADC for analog inputs, change detection, and interrupt-driven communication
+- **[pfs154](examples/pfs154/)** - Basic PDK14 (PFS154) test demonstrating PWM output and timers
 - **[pms150c](examples/pms150c/)** - Basic PDK13 (PMS150C) test demonstrating TM2 PWM output
+- **[keytai-keyswitch](examples/keytai-keyswitch/)** - PDK13 bitbanged protocol with SAR ADC for analog inputs, change detection, and interrupt-driven communication
 
 ## Open Questions
 

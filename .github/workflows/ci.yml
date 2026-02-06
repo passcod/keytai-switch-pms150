@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        example: [test, controller, pms150c]
+        example: [pfs154, keytai-keyswitch, pms150c]
 
     steps:
       - name: Checkout
