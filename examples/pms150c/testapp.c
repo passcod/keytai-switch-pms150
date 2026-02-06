@@ -27,10 +27,14 @@ void main(void) {
     PA = 0x00;   // Start low
     
     // Configure TM2 for PWM output on PA3
-    // TM2C: bit 7-6=output mode, bit 5-4=clock, bit 3=enable, bit 2-0=prescaler
-    TM2B = 0x40;  // Bound value
-    TM2S = 0x40;  // Scale value for ~50% duty
-    TM2C = 0xC8;  // Enable TM2, IHRC/16, PWM output on PA3
+    // TM2C format in simulation:
+    //   bits 7:4 = clock source (0x2 = IHRC)
+    //   bits 3:2 = output enable (0x2 = "10" = enable on PA3)
+    //   bit 1 = mode (1 = PWM, 0 = toggle)
+    //   bit 0 = invert output
+    TM2B = 0x40;  // Bound value = 64
+    TM2S = 0x40;  // Scale value = 64 for ~50% duty
+    TM2C = 0x2A;  // IHRC clock (0x2), output on PA3 (bits 3:2=10), PWM mode (bit 1=1)
     
     // Main loop - just keep running
     while(1) {

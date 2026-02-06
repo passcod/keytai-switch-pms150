@@ -121,7 +121,7 @@ begin
       -- 16-bit memory operations: 0x00C.-0x00F.
       elsif opcode_i(12 downto 7) = "000001" then
         dt := opcode_i(6) & opcode_i(0);
-        dec.memaddr <= unsigned(opcode_i(5 downto 1) & '0'); -- Word aligned
+        dec.memaddr <= unsigned(opcode_i(4 downto 0) & '0'); -- Word aligned, 5-bit word address
         case dt is
           when "00"   => dec.decoded <= opcode_stt16m;  -- STT16 M
           when "01"   => dec.decoded <= opcode_ldt16m;  -- LDT16 M
