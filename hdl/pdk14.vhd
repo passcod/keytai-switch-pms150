@@ -298,13 +298,13 @@ begin
       comp_result := '0';
     end if;
     
-    -- Debug output (disabled for now - too verbose in combinational process)
-    --if DEBUG_ENABLED then
-    --  report "COMP: GPCS=" & integer'image(to_integer(GPCS)) &
-    --         " input=" & integer'image(to_integer(comp_input)) &
-    --         " ref=" & integer'image(to_integer(comp_ref)) &
-    --         " result=" & std_logic'image(comp_result);
-    --end if;
+    -- Debug output
+    if DEBUG_ENABLED and gpcc_reg_s(7) = '1' then
+      report "COMP: GPCS=" & integer'image(to_integer(GPCS(2 downto 0))) &
+             " input=" & integer'image(to_integer(comp_input)) &
+             " ref=" & integer'image(to_integer(comp_ref)) &
+             " result=" & std_logic'image(comp_result);
+    end if;
     
     -- GPCC output: combine register with comparison result in bit 4
     GPCC <= gpcc_reg_s(7 downto 5) & comp_result & gpcc_reg_s(3 downto 0);
@@ -663,6 +663,20 @@ begin
           
         when opcode_t1snm =>
           if readMem( to_integer(dec.memaddr) )( to_integer(dec.bitaddr) )='1' then
+            npc <= IPC + 2;
+            jmp <= '1';
+          end if;
+
+        when opcode_izsnm =>
+          temp := readMem( to_integer(dec.memaddr) ) + 1;
+          if temp = 0 then
+            npc <= IPC + 2;
+            jmp <= '1';
+          end if;
+
+        when opcode_dzsnm =>
+          temp := readMem( to_integer(dec.memaddr) ) - 1;
+          if temp = 0 then
             npc <= IPC + 2;
             jmp <= '1';
           end if;

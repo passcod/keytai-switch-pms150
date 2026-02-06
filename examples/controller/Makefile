@@ -40,6 +40,6 @@ $(CSOURCE).ihex: $(CSOURCE).c
 
 clean:
 	rm -f *.o *.rel *.lst *.sym *.asm *.rst *.map *.lk *.ihex *.bin
-	rm -f pdkrom.vhd work-obj*.cf $(TESTBENCH)
+	rm -f pdkrom.vhd work-obj*.cf $(TESTBENCH) e~*.o *.ghw
 
 .PHONY: all clean

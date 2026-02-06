@@ -11,27 +11,36 @@ architecture sim of test is
   signal pa_s : std_logic_vector(7 downto 0);
   signal pb_s : std_logic_vector(7 downto 0);
 
-  -- Protocol signals
-  signal clk_ext   : std_logic := '0';  -- External clock on PA0
-  signal data_in   : std_logic := '1';  -- Data driven by testbench (when DUT receives)
+  -- Directly controllable test signals
+  signal tb_pa0 : std_logic := 'L';  -- Clock driven by testbench (active-high pulses)
+  signal tb_pa5 : std_logic := 'Z';  -- Data driven by testbench during receive phase
   
-  -- Mock comparator control
-  signal mock_comp_result : std_logic := '0';
-  signal mock_coord_x     : unsigned(3 downto 0) := x"A";  -- Test value
-  signal mock_coord_y     : unsigned(3 downto 0) := x"5";  -- Test value
+  -- Mock comparator values
+  signal mock_coord_x     : unsigned(3 downto 0) := x"A";  -- Test value = 10
+  signal mock_coord_y     : unsigned(3 downto 0) := x"5";  -- Test value = 5
   signal mock_buttons     : unsigned(3 downto 0) := x"7";  -- btn1=1, btn2=0
   
   -- Captured protocol data
-  signal captured_x    : std_logic_vector(3 downto 0);
-  signal captured_y    : std_logic_vector(3 downto 0);
-  signal captured_btn1 : std_logic;
-  signal captured_btn2 : std_logic;
+  signal captured_x    : std_logic_vector(3 downto 0) := "0000";
+  signal captured_y    : std_logic_vector(3 downto 0) := "0000";
+  signal captured_btn1 : std_logic := '0';
+  signal captured_btn2 : std_logic := '0';
   
   -- Test LED value to send
-  signal led_to_send : std_logic_vector(7 downto 0) := x"A5";
+  constant LED_TO_SEND : std_logic_vector(7 downto 0) := x"A5";
 
-  constant CLK_PERIOD : time := 10 us;  -- 100 kHz external clock
+  constant CLK_PERIOD : time := 100 us;  -- 10 kHz external clock (slower for DUT response time)
   constant DEBUG_ENABLED: boolean := false;
+
+  -- Helper to read PA5 resolving weak values
+  function read_pa5(pa : std_logic_vector) return std_logic is
+  begin
+    case pa(5) is
+      when '1' | 'H' => return '1';
+      when '0' | 'L' => return '0';
+      when others => return '0';
+    end case;
+  end function;
 
 begin
 
@@ -49,12 +58,20 @@ begin
       comp_pa4_i => mock_buttons    -- PA4 = buttons
     );
 
-  -- Drive PA0 with external clock
-  pa_s(0) <= clk_ext;
+  -- Drive PA0 with weak clock signal (testbench is external master)
+  -- DUT configures PA0 as input, so it won't fight this
+  pa_s(0) <= tb_pa0;
   
-  -- Drive PA5 when testbench is sending (during receive phase)
-  -- Otherwise high-Z to let DUT drive
-  -- This is simplified: in real sim we'd need proper tristate handling
+  -- Drive PA5 only during receive phase, otherwise high-Z
+  pa_s(5) <= tb_pa5;
+  
+  -- Other PA pins directly from DUT (directly affected by tristate logic)
+  pa_s(1) <= 'Z';
+  pa_s(2) <= 'Z';
+  pa_s(3) <= 'Z';  -- PWM output
+  pa_s(4) <= 'Z';
+  pa_s(6) <= 'Z';
+  pa_s(7) <= 'Z';
 
   -- Monitor PWM output on PA3
   m1: entity work.measperiod
@@ -68,100 +85,146 @@ begin
   -- Main test process
   stim: process
     variable i : integer;
-    variable bit_val : std_logic;
+    variable cap_bit : std_logic;
     
-    -- Generate one clock pulse
+    -- Generate one clock pulse using strong drive (overrides DUT pull-up)
     procedure pulse_clock is
     begin
-      clk_ext <= '1';
+      tb_pa0 <= '1';
       wait for CLK_PERIOD / 2;
-      clk_ext <= '0';
+      tb_pa0 <= '0';
       wait for CLK_PERIOD / 2;
     end procedure;
     
-    -- Receive a bit from PA5
-    procedure recv_bit(signal b : out std_logic) is
+    -- Clock high phase with sampling in the middle
+    -- DUT sets data BEFORE clock rises, but needs time to process after detecting edge
+    -- Sample after DUT has had time to set next bit and stabilize
+    procedure clock_high is
     begin
-      clk_ext <= '1';
-      wait for CLK_PERIOD / 4;
-      b <= pa_s(5);
-      wait for CLK_PERIOD / 4;
-      clk_ext <= '0';
+      tb_pa0 <= '1';
+      wait for 35 us;  -- Sample after DUT has time to process edge and set data
+    end procedure;
+    
+    -- Complete the clock high phase after sampling
+    procedure clock_high_finish is
+    begin
+      wait for CLK_PERIOD / 2 - 35 us;  -- Remainder of high phase
+    end procedure;
+    
+    procedure clock_low is
+    begin
+      tb_pa0 <= '0';
       wait for CLK_PERIOD / 2;
     end procedure;
     
   begin
-    -- Let the system initialize and run SAR sampling for a bit
-    wait for 500 us;
+    -- Initialize
+    tb_pa0 <= '0';
+    tb_pa5 <= 'Z';  -- Let DUT drive during its transmit phase
     
-    -- Trigger protocol by pulsing PA0 (interrupt)
+    if DEBUG_ENABLED then
+      report "pa_s(0) = " & std_logic'image(pa_s(0));
+    end if;
+    
+    -- Let the system initialize and run SAR sampling
+    wait for 1200 us;  -- Allow at least one full SAR sample cycle (coord_x, coord_y, buttons) to complete
+    
+    if DEBUG_ENABLED then
+      report "After init, pa_s(0) = " & std_logic'image(pa_s(0));
+    end if;
+    
+    -- Trigger protocol by pulsing PA0 (interrupt on rising edge)
     report "Triggering protocol exchange";
     pulse_clock;
     
-    -- Wait for DUT to start sending sync (PA5 low for 4 beats)
-    wait for 10 us;
+    if DEBUG_ENABLED then
+      report "After trigger pulse, pa_s(0) = " & std_logic'image(pa_s(0));
+    end if;
     
-    -- Clock through the sync pattern (4 beats)
-    for i in 0 to 3 loop
+    -- Wait for DUT to enter ISR and set PA5 as output
+    wait for 50 us;
+    
+    -- Clock through the sync pattern (3 more beats - trigger pulse counted as first)
+    report "Clocking sync pattern";
+    for i in 0 to 2 loop
       pulse_clock;
     end loop;
     
-    -- Receive coord_x (4 bits)
+    -- Receive coord_x (4 bits, MSB first)
     for i in 3 downto 0 loop
-      clk_ext <= '1';
-      wait for CLK_PERIOD / 4;
-      captured_x(i) <= pa_s(5);
-      wait for CLK_PERIOD / 4;
-      clk_ext <= '0';
-      wait for CLK_PERIOD / 2;
+      clock_high;
+      if DEBUG_ENABLED then
+        report "Sample coord_x[" & integer'image(i) & "] = pa_s(5)=" & std_logic'image(pa_s(5));
+      end if;
+      captured_x(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
     end loop;
     report "Captured coord_x: " & integer'image(to_integer(unsigned(captured_x)));
     
-    -- Receive coord_y (4 bits)
+    -- Receive coord_y (4 bits, MSB first)
     for i in 3 downto 0 loop
-      clk_ext <= '1';
-      wait for CLK_PERIOD / 4;
-      captured_y(i) <= pa_s(5);
-      wait for CLK_PERIOD / 4;
-      clk_ext <= '0';
-      wait for CLK_PERIOD / 2;
+      clock_high;
+      captured_y(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
     end loop;
     report "Captured coord_y: " & integer'image(to_integer(unsigned(captured_y)));
     
-    -- Receive btn1, btn2
-    clk_ext <= '1';
-    wait for CLK_PERIOD / 4;
-    captured_btn1 <= pa_s(5);
-    wait for CLK_PERIOD / 4;
-    clk_ext <= '0';
-    wait for CLK_PERIOD / 2;
+    -- Receive btn1
+    clock_high;
+    captured_btn1 <= read_pa5(pa_s);
+    clock_high_finish;
+    clock_low;
     
-    clk_ext <= '1';
-    wait for CLK_PERIOD / 4;
-    captured_btn2 <= pa_s(5);
-    wait for CLK_PERIOD / 4;
-    clk_ext <= '0';
-    wait for CLK_PERIOD / 2;
+    -- Receive btn2
+    clock_high;
+    captured_btn2 <= read_pa5(pa_s);
+    clock_high_finish;
+    clock_low;
     
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
-    -- Now DUT switches to receive mode
-    -- Send sync pattern (hold data low for 4 beats)
-    wait for 20 us;  -- Let DUT switch direction
+    -- Now DUT switches PA5 to input mode for reception
+    -- Wait for DUT to reconfigure
+    wait for 20 us;
     
-    -- Drive sync on PA5 (low for 4 clocks)
-    -- Note: This requires tristate handling which is simplified here
+    -- Send sync pattern: drive PA5 low for 4 clock beats
+    tb_pa5 <= 'L';
     for i in 0 to 3 loop
       pulse_clock;
     end loop;
     
     -- Send LED value (8 bits, MSB first)
     for i in 7 downto 0 loop
-      -- Drive data line (would need proper tristate in real sim)
+      if LED_TO_SEND(i) = '1' then
+        tb_pa5 <= 'H';
+      else
+        tb_pa5 <= 'L';
+      end if;
       pulse_clock;
     end loop;
     
+    -- Release PA5
+    tb_pa5 <= 'Z';
+    
+    -- Let DUT process and update PWM
     wait for 100 us;
+    
+    -- Verify results
+    -- Note: SAR uses '>' comparison, so result is 1 less than input when input is exact power of 2
+    -- mock_coord_x = 10 (0xA), SAR gives 9 (since 10 is not > 10, final bit test fails)
+    -- mock_coord_y = 5 (0x5), SAR gives 4 (since 5 is not > 5, final bit test fails)
+    report "=== Test Results ===";
+    report "Expected coord_x=9 (SAR of 10), got " & integer'image(to_integer(unsigned(captured_x)));
+    report "Expected coord_y=4 (SAR of 5), got " & integer'image(to_integer(unsigned(captured_y)));
+    report "Expected btn1='1' btn2='0', got btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
+    
+    if unsigned(captured_x) = 9 and unsigned(captured_y) = 4 and captured_btn1 = '1' and captured_btn2 = '0' then
+      report "TEST PASSED";
+    else
+      report "TEST FAILED - values don't match expected" severity warning;
+    end if;
     
     report "Test complete";
     stop;
