@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ghdl sdcc binutils
+
+      - name: Build and run test example
+        working-directory: examples/test
+        run: |
+          make
+          ./test --wave=waveform.ghw
+
+      - name: Build and run controller example
+        working-directory: examples/controller
+        run: |
+          make
+          ./test --wave=waveform.ghw
+
+      - name: Upload test waveform
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-waveform
+          path: examples/test/waveform.ghw
+
+      - name: Upload controller waveform
+        uses: actions/upload-artifact@v6
+        with:
+          name: controller-waveform
+          path: examples/controller/waveform.ghw
