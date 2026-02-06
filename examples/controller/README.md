@@ -1,6 +1,6 @@
-# Controller Example
+# Keytai Keyswitch firmware
 
-A bitbanged SPI-like protocol for reading analog inputs (coordinates, buttons) and controlling an LED via PWM.
+Features a custom bitbanged protocol for reading analog inputs (coordinates, buttons) and controlling an LED via PWM.
 
 ## Pin Assignment
 
@@ -10,35 +10,35 @@ A bitbanged SPI-like protocol for reading analog inputs (coordinates, buttons) a
 | PA3 | PWM output | Output |
 | PA4 | Comparator- for buttons | Input (analog) |
 | PA5 | Data / Ready signal | Bidirectional |
-| PA6 | Comparator- for coord_y | Input (analog) |
-| PA7 | Comparator- for coord_x | Input (analog) |
+| PA6 | Comparator- for `coord_y` | Input (analog) |
+| PA7 | Comparator- for `coord_x` | Input (analog) |
 
 ## Ready Signal (PA5)
 
-The slave signals data availability via PA5:
+The keyswitch signals data availability via PA5:
 
 - **PA5 LOW**: No new data, or data already read
 - **PA5 HIGH**: Fresh data available for reading
 
-The master can either:
+The keyboard controller can either:
 1. Poll PA5 and only initiate exchange when HIGH (efficient)
 2. Periodically poll regardless of PA5 state (gets cached values)
 
-When the master triggers an exchange (rising edge on PA0), PA5 is immediately cleared.
+When the controller triggers an exchange (rising edge on PA0), PA5 is immediately cleared.
 
 ## Protocol Sequence
 
 All data is clocked on PA0 rising edges. PA5 carries bidirectional data.
 
 ```
-Phase 1: Slave → Master (14 bits)
+Phase 1: Keyswitch → Controller (14 bits)
   [4 clocks] Sync pattern (PA5 low)
   [4 clocks] coord_x (MSB first, 4 bits)
   [4 clocks] coord_y (MSB first, 4 bits)
   [1 clock]  btn1
   [1 clock]  btn2
 
-Phase 2: Master → Slave (12 bits)
+Phase 2: Keyswitch → Controller (12 bits)
   [4 clocks] Sync pattern (PA5 low)
   [8 clocks] LED value (MSB first, 8 bits)
 ```
@@ -51,7 +51,7 @@ Total: 26 clock pulses per exchange.
 
 | Parameter | Min | Typ | Max | Notes |
 |-----------|-----|-----|-----|-------|
-| Clock high time | 10 µs | 20 µs | — | Slave samples on rising edge |
+| Clock high time | 10 µs | 20 µs | — | Keyswitch samples on rising edge |
 | Clock low time | 10 µs | 20 µs | — | Data setup time |
 | Clock period | 20 µs | 40 µs | — | ~25-50 kHz max clock rate |
 
@@ -67,8 +67,8 @@ Total: 26 clock pulses per exchange.
 | Parameter | Min | Notes |
 |-----------|-----|-------|
 | Trigger to first sync | 0 µs | Trigger pulse counts as first sync clock |
-| After slave data, before master sync | 20 µs | Slave needs time to switch PA5 to input |
-| After master data, before next exchange | 100 µs | Slave needs time to process LED value |
+| After keyswitch data, before controller sync | 20 µs | Keyswitch needs time to switch PA5 to input |
+| After controller data, before next exchange | 100 µs | Keyswitch needs time to process LED value |
 
 ### SAR ADC Timing
 
@@ -80,7 +80,7 @@ Total: 26 clock pulses per exchange.
 
 ## Data Encoding
 
-### Coordinates (coord_x, coord_y)
+### Coordinates (`coord_x`, `coord_y`)
 
 4-bit values (0-15) from SAR ADC. Due to `>` comparison in SAR:
 - Input value N typically reads as N-1
