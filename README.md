@@ -1,6 +1,8 @@
 # VHDL FPPA PDK Simulation Model
 
-A fully functional, timing accurate VHDL model for simulating Padauk FPPA microcontrollers.
+A probably-functional, timing accurate VHDL model for simulating Padauk FPPA microcontrollers.
+
+Note that AI has been used for this; see the upstream for very old but AI-free code.
 
 ## Status
 
