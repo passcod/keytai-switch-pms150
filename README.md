@@ -9,16 +9,24 @@ Note that AI has been used for this; see the upstream for very old but AI-free c
 | Core | Chips | Status |
 |------|-------|--------|
 | PDK14 | PFS154 | ✅ Supported |
-| PDK13 | PMS150C | 🚧 Planned |
+| PDK13 | PMS150C | ✅ Supported |
 
 ### Supported Features
 
+#### PDK14 (PFS154)
 - Full instruction set (including extended instructions: `oram`, `andam`, `xoram`, `subam`, `decm`, `izsnm`, `dzsnm`, `xchm`)
-- GPIO with configurable pull-ups
+- GPIO with configurable pull-ups (Port A and Port B)
 - Timers (TM2, TM3)
 - PWM output (PWMG)
 - External interrupts
 - Comparator with programmable reference (for SAR ADC simulation)
+
+#### PDK13 (PMS150C)
+- Full instruction set (SYM_84B)
+- GPIO with configurable pull-ups (Port A only)
+- Timer TM2 with PWM output
+- External interrupts
+- Comparator with programmable reference
 
 ## Requirements
 
@@ -52,8 +60,9 @@ gtkwave waveform.ghw
 
 ## Examples
 
-- **[test](examples/test/)** - Basic test demonstrating PWM output and timers
-- **[controller](examples/controller/)** - Bitbanged protocol with SAR ADC for analog inputs, change detection, and interrupt-driven communication
+- **[test](examples/test/)** - Basic PDK14 test demonstrating PWM output and timers
+- **[controller](examples/controller/)** - PDK14 bitbanged protocol with SAR ADC for analog inputs, change detection, and interrupt-driven communication
+- **[pms150c](examples/pms150c/)** - Basic PDK13 (PMS150C) test demonstrating TM2 PWM output
 
 ## Open Questions
 
