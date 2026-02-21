@@ -89,6 +89,7 @@ begin
   stim: process
     variable i : integer;
     variable cap_bit : std_logic;
+    variable recv_length : std_logic_vector(7 downto 0);
     
     -- Generate one clock pulse using strong drive (overrides DUT pull-up)
     procedure pulse_clock is
@@ -184,6 +185,23 @@ begin
       tb_pa5 <= 'Z';
     end procedure;
     
+    -- Trigger exchange and read 8-bit length prefix from phase 1
+    procedure trigger_and_recv_length is
+    begin
+      -- Trigger: first rising edge, DUT outputs length bit 7
+      pulse_clock;
+      wait for 50 us;
+      -- Read remaining 7 bits (bits 6 downto 0)
+      for i in 6 downto 0 loop
+        clock_high;
+        recv_length(i) := read_pa5(pa_s);
+        clock_high_finish;
+        clock_low;
+      end loop;
+      -- Bit 7 is always 0 (lengths < 128)
+      recv_length(7) := '0';
+    end procedure;
+    
   begin
     -- Initialize
     tb_pa0 <= '0';
@@ -206,14 +224,9 @@ begin
       stop;
     end if;
     
-    -- Trigger capability exchange
-    pulse_clock;
-    wait for 50 us;
-    
-    -- Clock through sync (3 more beats)
-    for i in 0 to 2 loop
-      pulse_clock;
-    end loop;
+    -- Trigger capability exchange and read length prefix
+    trigger_and_recv_length;
+    report "Received length prefix: " & integer'image(to_integer(unsigned(recv_length)));
     
     -- Receive num_digital (4 bits, MSB first)
     for i in 3 downto 0 loop
@@ -278,7 +291,8 @@ begin
     if unsigned(cap_num_digital) = 2 and unsigned(cap_num_analog) = 2
        and unsigned(cap_analog_res_0) = 4 and unsigned(cap_analog_res_1) = 4
        and unsigned(cap_num_leds) = 1
-       and cap_led_type_0 = '1' then
+       and cap_led_type_0 = '1'
+       and unsigned(recv_length) = 21 then
       report "CAP TEST PASSED";
     else
       report "CAP TEST FAILED" severity warning;
@@ -300,21 +314,13 @@ begin
     
     report "PA5 ready signal detected, triggering exchange";
     
-    -- Trigger protocol by pulsing PA0 (interrupt on rising edge)
-    pulse_clock;
-    
-    -- Wait for DUT to enter ISR and clear ready signal
-    wait for 50 us;
+    -- Trigger protocol and read length prefix
+    trigger_and_recv_length;
     
     -- Verify ready signal was cleared
     if read_pa5(pa_s) = '1' then
       report "WARNING: Ready signal not cleared after trigger" severity warning;
     end if;
-    
-    -- Clock through the sync pattern (3 more beats - trigger pulse counted as first)
-    for i in 0 to 2 loop
-      pulse_clock;
-    end loop;
     
     -- Receive coord_x (4 bits, MSB first)
     for i in 3 downto 0 loop
@@ -381,13 +387,7 @@ begin
     end if;
     
     -- Trigger protocol even without ready signal (master polling)
-    pulse_clock;
-    wait for 50 us;
-    
-    -- Clock through sync pattern
-    for i in 0 to 2 loop
-      pulse_clock;
-    end loop;
+    trigger_and_recv_length;
     
     -- Receive coord_x
     for i in 3 downto 0 loop
@@ -459,12 +459,7 @@ begin
     report "Ready signal detected after value change";
     
     -- Exchange with new values
-    pulse_clock;
-    wait for 50 us;
-    
-    for i in 0 to 2 loop
-      pulse_clock;
-    end loop;
+    trigger_and_recv_length;
     
     for i in 3 downto 0 loop
       clock_high;

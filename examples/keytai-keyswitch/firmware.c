@@ -37,6 +37,10 @@ __sfr __at(0x19) gpcs;      // comparator select
 #define CAP_NUM_LEDS     1    // Single WS2812
 #define CAP_LED_TYPE_0   1    // 0=mono (8-bit), 1=RGB (24-bit)
 
+// Length prefix values (compile-time constants)
+#define CAP_LENGTH  (4 + 4 + 4*CAP_NUM_ANALOG + 4 + CAP_NUM_LEDS)  // 21
+#define DATA_LENGTH (CAP_ANALOG_RES_0 + CAP_ANALOG_RES_1 + CAP_NUM_DIGITAL)  // 10
+
 // === Cached values (updated in main loop) ===
 volatile uint8_t capabilities_sent;
 volatile uint8_t coord_x;
@@ -161,16 +165,6 @@ static uint8_t detect_sync(void) {
     return 1;
 }
 
-// Send sync pattern: hold PA5 low for 4 clock beats
-static void send_sync(void) {
-    uint8_t i;
-    pa &= ~(1 << PIN_DATA);
-    for (i = 0; i < 4; i++) {
-        wait_clk_high();
-        wait_clk_low();
-    }
-}
-
 // Send a 4-bit nibble MSB first
 static void send_nibble(uint8_t val) {
     uint8_t mask = 0x08;
@@ -199,6 +193,7 @@ static uint8_t recv_byte(void) {
 
 // Send device capabilities (first exchange only)
 static void send_capabilities(void) {
+    send_byte(CAP_LENGTH);
     send_nibble(CAP_NUM_DIGITAL);
     send_nibble(CAP_NUM_ANALOG);
     send_nibble(CAP_ANALOG_RES_0);
@@ -209,6 +204,7 @@ static void send_capabilities(void) {
 
 // Send sensor data (normal exchange)
 static void send_data(void) {
+    send_byte(DATA_LENGTH);
     send_nibble(coord_x);
     send_nibble(coord_y);
     send_bit(btn1);
@@ -229,9 +225,6 @@ static void protocol_exchange(void) {
     
     // PA5 is already output mode (set in init), just make sure it's low
     pa &= ~(1 << PIN_DATA);
-    
-    // Send sync (4 beats low)
-    send_sync();
     
     if (!capabilities_sent) {
         send_capabilities();

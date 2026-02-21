@@ -30,11 +30,15 @@ When the controller triggers an exchange (rising edge on PA0), PA5 is immediatel
 
 All data is clocked on PA0 rising edges. PA5 carries bidirectional data.
 
+Phase 1 (keyswitch → controller) starts with an 8-bit length prefix instead of a sync pattern. The length value tells the controller how many data bits follow, and also identifies whether it's a capability or data exchange (useful for detecting device resets).
+
+Phase 2 (controller → keyswitch) retains a 4-clock sync pattern.
+
 ### First Exchange: Capability Discovery
 
 ```
 Phase 1: Keyswitch → Controller (variable length)
-  [4 clocks]    Sync pattern (PA5 low)
+  [8 bits]      length prefix (number of data bits following)
   [4 bits]      num_digital (D) — number of digital outputs
   [4 bits]      num_analog (A) — number of analog outputs
   [4 bits × A]  analog_resolution — bitwidth per analog channel
@@ -47,13 +51,13 @@ Phase 2: Controller → Keyswitch (6 bits)
 ```
 
 For this device: num_digital=2, num_analog=2, resolution=[4, 4], num_leds=1, led_type=[1 (RGB)].
-Total: 4 + 4+4 + 4+4 + 4 + 1 = 25 clocks.
+Length prefix = 21, total = 8 + 21 = 29 clocks.
 
 ### Subsequent Exchanges: Data Updates
 
 ```
 Phase 1: Keyswitch → Controller (variable length)
-  [4 clocks] Sync pattern (PA5 low)
+  [8 bits]    length prefix (number of data bits following)
   [R × A clocks] Analog values (R bits each, A channels, MSB first)
   [D clocks] Digital values (1 bit each)
 
@@ -67,7 +71,7 @@ Phase 2: Controller → Keyswitch (6 or 30 bits)
   [24 clocks] R, G, B (8 bits each, MSB first)  — only if command = 0b01 or 0b10
 ```
 
-For this device: Phase 1 data = 4+4+1+1 = 10 bits, total 14 clocks.
+For this device: Phase 1 data = 4+4+1+1 = 10 bits, length prefix = 10, total = 18 clocks.
 Commands 0b01 and 0b10 are equivalent (single LED).
 
 ## Timing Requirements
