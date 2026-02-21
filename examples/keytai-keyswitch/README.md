@@ -38,14 +38,17 @@ Phase 1: Keyswitch → Controller (14 bits)
   [1 clock]  btn1
   [1 clock]  btn2
 
-Phase 2: Controller → Keyswitch (28 bits)
+Phase 2: Controller → Keyswitch (6 or 30 bits)
   [4 clocks] Sync pattern (PA5 low)
-  [8 clocks] Red (MSB first, 8 bits)
-  [8 clocks] Green (MSB first, 8 bits)
-  [8 clocks] Blue (MSB first, 8 bits)
+  [2 clocks] Command (MSB first):
+             0b00 = skip (no colour update, phase ends here)
+             0b01 = RGB colour follows
+  [8 clocks] Red (MSB first, 8 bits)    ─┐
+  [8 clocks] Green (MSB first, 8 bits)   ├─ only if command = 0b01
+  [8 clocks] Blue (MSB first, 8 bits)   ─┘
 ```
 
-Total: 42 clock pulses per exchange.
+Total: 20 clock pulses (skip) or 44 clock pulses (colour update).
 
 ## Timing Requirements
 

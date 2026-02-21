@@ -193,22 +193,28 @@ static void protocol_exchange(void) {
     // Wait for incoming sync
     while (!detect_sync());
     
-    // Receive RGB colour (24 bits, MSB first, R then G then B)
-    led_r = 0;
-    for (i = 0; i < 8; i++) {
-        led_r = (led_r << 1) | recv_bit();
-    }
-    led_g = 0;
-    for (i = 0; i < 8; i++) {
-        led_g = (led_g << 1) | recv_bit();
-    }
-    led_b = 0;
-    for (i = 0; i < 8; i++) {
-        led_b = (led_b << 1) | recv_bit();
-    }
+    // Receive 2-bit command (MSB first)
+    uint8_t cmd = (recv_bit() << 1) | recv_bit();
     
-    // Signal main loop to update WS2812 LED
-    led_update = 1;
+    if (cmd == 0x01) {
+        // 0b01: RGB colour follows (24 bits, MSB first, R then G then B)
+        led_r = 0;
+        for (i = 0; i < 8; i++) {
+            led_r = (led_r << 1) | recv_bit();
+        }
+        led_g = 0;
+        for (i = 0; i < 8; i++) {
+            led_g = (led_g << 1) | recv_bit();
+        }
+        led_b = 0;
+        for (i = 0; i < 8; i++) {
+            led_b = (led_b << 1) | recv_bit();
+        }
+        
+        // Signal main loop to update WS2812 LED
+        led_update = 1;
+    }
+    // 0b00: skip (no colour update)
     
     // Switch PA5 back to output mode, driving low (ready cleared)
     pa &= ~(1 << PIN_DATA);

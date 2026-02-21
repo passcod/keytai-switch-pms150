@@ -112,7 +112,7 @@ begin
       wait for CLK_PERIOD / 2;
     end procedure;
     
-    -- Send 24-bit RGB colour (R, G, B) during phase 2
+    -- Send 24-bit RGB colour (R, G, B) during phase 2 with command 0b01
     procedure send_rgb(r, g, b : std_logic_vector(7 downto 0)) is
     begin
       -- Send sync pattern: drive PA5 low for 4 clock beats
@@ -120,6 +120,11 @@ begin
       for i in 0 to 3 loop
         pulse_clock;
       end loop;
+      -- Send command 0b01 (colour update)
+      tb_pa5 <= '0';
+      pulse_clock;
+      tb_pa5 <= '1';
+      pulse_clock;
       -- Send R (8 bits, MSB first)
       for i in 7 downto 0 loop
         tb_pa5 <= r(i);
@@ -135,6 +140,22 @@ begin
         tb_pa5 <= b(i);
         pulse_clock;
       end loop;
+      -- Release PA5
+      tb_pa5 <= 'Z';
+    end procedure;
+    
+    -- Send skip command (no colour update) during phase 2
+    procedure send_skip is
+    begin
+      -- Send sync pattern: drive PA5 low for 4 clock beats
+      tb_pa5 <= '0';
+      for i in 0 to 3 loop
+        pulse_clock;
+      end loop;
+      -- Send command 0b00 (skip)
+      tb_pa5 <= '0';
+      pulse_clock;
+      pulse_clock;
       -- Release PA5
       tb_pa5 <= 'Z';
     end procedure;
@@ -283,10 +304,10 @@ begin
     
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
-    -- Complete LED send phase
+    -- Complete phase 2 with skip (no colour update)
     wait for 20 us;
-    send_rgb(LED_R_TO_SEND, LED_G_TO_SEND, LED_B_TO_SEND);
-    report "TEST 2 LED send complete";
+    send_skip;
+    report "TEST 2 skip command sent";
     wait for 500 us;  -- Give DUT time to finish ISR
     
     -- Check TEST 2 results (should get same values as TEST 1 - stale but consistent)
