@@ -27,7 +27,7 @@ __sfr __at(0x25) pwmg0cubl;
 __sfr16 t16cnt;
 
 
-unsigned char _sdcc_external_startup(void)
+unsigned char __sdcc_external_startup(void)
 {
     ihrcr = 0x81;
     clkmd = 0x30;

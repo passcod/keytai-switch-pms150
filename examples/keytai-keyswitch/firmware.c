@@ -17,11 +17,6 @@ __sfr __at(0x10) pa;
 __sfr __at(0x11) pac;       // direction: 1=output
 __sfr __at(0x12) paph;      // pull-up
 
-// Timer2 (PWM)
-__sfr __at(0x1c) tm2c;
-__sfr __at(0x17) tm2s;
-__sfr __at(0x09) tm2b;
-
 // Comparator
 __sfr __at(0x18) gpcc;      // comparator control
 __sfr __at(0x19) gpcs;      // comparator select
@@ -29,7 +24,7 @@ __sfr __at(0x19) gpcs;      // comparator select
 // === Pin definitions ===
 #define PIN_CLK     0       // PA0 - clock input
 #define PIN_DATA    5       // PA5 - bidirectional data
-#define PIN_PWM     3       // PA3 - PWM output
+#define PIN_LED     3       // PA3 - WS2812 data output
 #define PIN_COMPN_X 7       // PA7 - comparator- for coord_x
 #define PIN_COMPN_Y 6       // PA6 - comparator- for coord_y
 #define PIN_COMPN_B 4       // PA4 - comparator- for buttons
@@ -39,7 +34,10 @@ volatile uint8_t coord_x;
 volatile uint8_t coord_y;
 volatile uint8_t btn1;
 volatile uint8_t btn2;
-volatile uint8_t led_value;
+volatile uint8_t led_r;
+volatile uint8_t led_g;
+volatile uint8_t led_b;
+volatile uint8_t led_update;  // Flag: ISR sets to 1 when new LED data received
 
 // === Comparator helpers ===
 
@@ -83,6 +81,32 @@ static uint8_t sar_read_4bit(uint8_t input_pin) {
         // If input <= reference, don't set the bit (try lower value)
     }
     return result & 0x0F;
+}
+
+// === WS2812 bitbang ===
+// WS2812 timing (at ~8MHz IHRC):
+//   T0H: ~375ns (3 cycles), T0L: ~875ns (7 cycles)
+//   T1H: ~875ns (7 cycles), T1L: ~375ns (3 cycles)
+//   Reset: >50us low
+// WS2812 colour order is GRB
+//
+// Sends a single byte on PA3 using WS2812 protocol
+static void ws2812_byte(uint8_t byte) {
+    uint8_t i;
+    for (i = 0; i < 8; i++) {
+        if (byte & 0x80) {
+            pa |= (1 << PIN_LED);
+            __asm__("nop\nnop\nnop\nnop\nnop");
+            pa &= ~(1 << PIN_LED);
+            __asm__("nop");
+        } else {
+            pa |= (1 << PIN_LED);
+            __asm__("nop");
+            pa &= ~(1 << PIN_LED);
+            __asm__("nop\nnop\nnop\nnop\nnop");
+        }
+        byte <<= 1;
+    }
 }
 
 // === Bitbang protocol ===
@@ -141,7 +165,6 @@ static void send_sync(void) {
 // === Protocol handler (called from ISR) ===
 static void protocol_exchange(void) {
     uint8_t i;
-    uint8_t new_led = 0;
     
     // PA5 is already output mode (set in init), just make sure it's low
     pa &= ~(1 << PIN_DATA);
@@ -170,15 +193,22 @@ static void protocol_exchange(void) {
     // Wait for incoming sync
     while (!detect_sync());
     
-    // Receive LED value (8 bits, MSB first)
+    // Receive RGB colour (24 bits, MSB first, R then G then B)
+    led_r = 0;
     for (i = 0; i < 8; i++) {
-        new_led = (new_led << 1) | recv_bit();
+        led_r = (led_r << 1) | recv_bit();
+    }
+    led_g = 0;
+    for (i = 0; i < 8; i++) {
+        led_g = (led_g << 1) | recv_bit();
+    }
+    led_b = 0;
+    for (i = 0; i < 8; i++) {
+        led_b = (led_b << 1) | recv_bit();
     }
     
-    led_value = new_led;
-    
-    // Update PWM duty cycle
-    tm2b = led_value;
+    // Signal main loop to update WS2812 LED
+    led_update = 1;
     
     // Switch PA5 back to output mode, driving low (ready cleared)
     pa &= ~(1 << PIN_DATA);
@@ -217,7 +247,7 @@ void isr(void) __interrupt(0) {
 }
 
 // === Startup ===
-uint8_t _sdcc_external_startup(void) {
+uint8_t __sdcc_external_startup(void) {
     clkmd = 0x30;               // IHRC, no watchdog
     return 0;
 }
@@ -230,7 +260,7 @@ void main(void) {
     
     // Initialize ports
     pa = 0;
-    pac = (1 << PIN_PWM) | (1 << PIN_DATA);  // PA3 output for PWM, PA5 output for ready signal (starts low)
+    pac = (1 << PIN_LED) | (1 << PIN_DATA);  // PA3 output for WS2812, PA5 output for ready signal (starts low)
     paph = (1 << PIN_CLK);  // Pull-up on clock only (PA5 is output-driven now)
     
     // Initialize variables
@@ -238,12 +268,17 @@ void main(void) {
     coord_y = 0;
     btn1 = 0;
     btn2 = 0;
-    led_value = 0;
+    led_r = 0;
+    led_g = 0;
+    led_b = 0;
+    led_update = 0;
     
-    // Configure Timer2 for PWM on PA3
-    tm2c = 0x1A;                // PWM on PA3, IHRC, prescaler 1
-    tm2b = 0x00;                // Start with 0 duty cycle
-    tm2s = 0x00;
+    // Send initial WS2812 reset (LED off)
+    __asm__("disgint");
+    ws2812_byte(0);
+    ws2812_byte(0);
+    ws2812_byte(0);
+    __asm__("engint");
     
     // Configure PA0 interrupt (rising edge)
     padier = (1 << PIN_CLK);    // Enable PA0 digital input
@@ -305,6 +340,16 @@ void main(void) {
             
             // Signal ready: set PA5 high (already output mode from init)
             pa |= (1 << PIN_DATA);
+        }
+        
+        // Update WS2812 LED if new data received from ISR
+        if (led_update) {
+            led_update = 0;
+            __asm__("disgint");
+            ws2812_byte(led_g);
+            ws2812_byte(led_r);
+            ws2812_byte(led_b);
+            __asm__("engint");
         }
     }
 }

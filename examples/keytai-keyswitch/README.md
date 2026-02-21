@@ -1,13 +1,13 @@
 # Keytai Keyswitch firmware
 
-Features a custom bitbanged protocol for reading analog inputs (coordinates, buttons) and controlling an LED via PWM.
+Features a custom bitbanged protocol for reading analog inputs (coordinates, buttons) and controlling a WS2812 NeoPixel LED.
 
 ## Pin Assignment
 
 | Pin | Function | Direction |
 |-----|----------|-----------|
 | PA0 | Clock | Input (interrupt on rising edge) |
-| PA3 | PWM output | Output |
+| PA3 | WS2812 data output | Output |
 | PA4 | Comparator- for buttons | Input (analog) |
 | PA5 | Data / Ready signal | Bidirectional |
 | PA6 | Comparator- for `coord_y` | Input (analog) |
@@ -38,12 +38,14 @@ Phase 1: Keyswitch → Controller (14 bits)
   [1 clock]  btn1
   [1 clock]  btn2
 
-Phase 2: Keyswitch → Controller (12 bits)
+Phase 2: Controller → Keyswitch (28 bits)
   [4 clocks] Sync pattern (PA5 low)
-  [8 clocks] LED value (MSB first, 8 bits)
+  [8 clocks] Red (MSB first, 8 bits)
+  [8 clocks] Green (MSB first, 8 bits)
+  [8 clocks] Blue (MSB first, 8 bits)
 ```
 
-Total: 26 clock pulses per exchange.
+Total: 42 clock pulses per exchange.
 
 ## Timing Requirements
 
@@ -120,7 +122,7 @@ Decoded via 2-comparison binary search (see Button Circuit above):
 
 ### LED Value
 
-8-bit PWM duty cycle (0-255) written to Timer2.
+24-bit RGB color (R, G, B bytes) sent over the protocol, output via bitbanged WS2812 on PA3.
 
 ## Example Waveform
 
@@ -138,7 +140,7 @@ PA5  ‾‾‾|_______|_______|_______|_______|_____ ...
 
 ## Building
 
-Requires SDCC (with PDK14 support) and GHDL:
+Requires SDCC (with PDK13 support) and GHDL:
 
 ```bash
 make          # Build and run simulation

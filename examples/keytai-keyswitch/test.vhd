@@ -27,8 +27,10 @@ architecture sim of test is
   signal captured_btn1 : std_logic := '0';
   signal captured_btn2 : std_logic := '0';
   
-  -- Test LED value to send
-  constant LED_TO_SEND : std_logic_vector(7 downto 0) := x"A5";
+  -- Test RGB colour to send (R, G, B)
+  constant LED_R_TO_SEND : std_logic_vector(7 downto 0) := x"FF";
+  constant LED_G_TO_SEND : std_logic_vector(7 downto 0) := x"80";
+  constant LED_B_TO_SEND : std_logic_vector(7 downto 0) := x"20";
 
   constant CLK_PERIOD : time := 100 us;  -- 10 kHz external clock (slower for DUT response time)
   constant DEBUG_ENABLED: boolean := false;
@@ -73,14 +75,7 @@ begin
   pa_s(6) <= 'Z';
   pa_s(7) <= 'Z';
 
-  -- Monitor PWM output on PA3
-  m1: entity work.measperiod
-    generic map (
-      NAME => "PWM_PA3"
-    )
-    port map (
-      sig_i => pa_s(3)
-    );
+  -- PA3 is WS2812 data output (no continuous monitor needed)
 
   -- Main test process
   stim: process
@@ -115,6 +110,33 @@ begin
     begin
       tb_pa0 <= '0';
       wait for CLK_PERIOD / 2;
+    end procedure;
+    
+    -- Send 24-bit RGB colour (R, G, B) during phase 2
+    procedure send_rgb(r, g, b : std_logic_vector(7 downto 0)) is
+    begin
+      -- Send sync pattern: drive PA5 low for 4 clock beats
+      tb_pa5 <= '0';
+      for i in 0 to 3 loop
+        pulse_clock;
+      end loop;
+      -- Send R (8 bits, MSB first)
+      for i in 7 downto 0 loop
+        tb_pa5 <= r(i);
+        pulse_clock;
+      end loop;
+      -- Send G (8 bits, MSB first)
+      for i in 7 downto 0 loop
+        tb_pa5 <= g(i);
+        pulse_clock;
+      end loop;
+      -- Send B (8 bits, MSB first)
+      for i in 7 downto 0 loop
+        tb_pa5 <= b(i);
+        pulse_clock;
+      end loop;
+      -- Release PA5
+      tb_pa5 <= 'Z';
     end procedure;
     
   begin
@@ -192,25 +214,11 @@ begin
     -- Now DUT switches PA5 to input mode for reception
     wait for 20 us;
     
-    -- Send sync pattern: drive PA5 low for 4 clock beats
-    tb_pa5 <= '0';
-    for i in 0 to 3 loop
-      pulse_clock;
-    end loop;
+    -- Send RGB colour (24 bits: R, G, B)
+    send_rgb(LED_R_TO_SEND, LED_G_TO_SEND, LED_B_TO_SEND);
     
-    -- Send LED value (8 bits, MSB first)
-    for i in 7 downto 0 loop
-      if LED_TO_SEND(i) = '1' then
-        tb_pa5 <= '1';
-      else
-        tb_pa5 <= '0';
-      end if;
-      pulse_clock;
-    end loop;
-    
-    -- Release PA5 - DUT is now in output mode again
-    tb_pa5 <= 'Z';
-    wait for 100 us;
+    -- Wait for DUT to process WS2812 output
+    wait for 200 us;
     
     -- Check TEST 1 results
     report "--- TEST 1 Results ---";
@@ -247,7 +255,8 @@ begin
     -- Receive coord_x
     for i in 3 downto 0 loop
       clock_high;
-      captured_x(i) <= read_pa5(pa_s);
+      cap_bit := read_pa5(pa_s);
+      captured_x(i) <= cap_bit;
       clock_high_finish;
       clock_low;
     end loop;
@@ -276,20 +285,7 @@ begin
     
     -- Complete LED send phase
     wait for 20 us;
-    tb_pa5 <= '0';
-    wait for 5 us;  -- Allow PA5 to propagate through synchronizer
-    for i in 0 to 3 loop
-      pulse_clock;
-    end loop;
-    for i in 7 downto 0 loop
-      if LED_TO_SEND(i) = '1' then
-        tb_pa5 <= '1';
-      else
-        tb_pa5 <= '0';
-      end if;
-      pulse_clock;
-    end loop;
-    tb_pa5 <= 'Z';
+    send_rgb(LED_R_TO_SEND, LED_G_TO_SEND, LED_B_TO_SEND);
     report "TEST 2 LED send complete";
     wait for 500 us;  -- Give DUT time to finish ISR
     
@@ -361,20 +357,8 @@ begin
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
     wait for 20 us;
-    tb_pa5 <= '0';
-    for i in 0 to 3 loop
-      pulse_clock;
-    end loop;
-    for i in 7 downto 0 loop
-      if LED_TO_SEND(i) = '1' then
-        tb_pa5 <= '1';
-      else
-        tb_pa5 <= '0';
-      end if;
-      pulse_clock;
-    end loop;
-    tb_pa5 <= 'Z';
-    wait for 100 us;
+    send_rgb(LED_R_TO_SEND, LED_G_TO_SEND, LED_B_TO_SEND);
+    wait for 200 us;
     
     -- Check TEST 3 results
     -- mock_coord_x=12, SAR gives 11
