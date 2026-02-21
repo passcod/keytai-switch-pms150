@@ -32,9 +32,10 @@ __sfr __at(0x19) gpcs;      // comparator select
 // === Device capabilities (hardcoded) ===
 #define CAP_NUM_DIGITAL  2    // btn1, btn2
 #define CAP_NUM_ANALOG   2    // coord_x, coord_y
-#define CAP_ANALOG_RES   4    // 4-bit SAR
+#define CAP_ANALOG_RES_0 4    // coord_x: 4-bit SAR
+#define CAP_ANALOG_RES_1 4    // coord_y: 4-bit SAR
 #define CAP_NUM_LEDS     1    // Single WS2812
-#define CAP_LED_TYPE     1    // 0=mono (8-bit), 1=RGB (24-bit)
+#define CAP_LED_TYPE_0   1    // 0=mono (8-bit), 1=RGB (24-bit)
 
 // === Cached values (updated in main loop) ===
 volatile uint8_t capabilities_sent;
@@ -200,9 +201,10 @@ static uint8_t recv_byte(void) {
 static void send_capabilities(void) {
     send_nibble(CAP_NUM_DIGITAL);
     send_nibble(CAP_NUM_ANALOG);
-    send_nibble(CAP_ANALOG_RES);
-    send_byte(CAP_NUM_LEDS);
-    send_bit(CAP_LED_TYPE);
+    send_nibble(CAP_ANALOG_RES_0);
+    send_nibble(CAP_ANALOG_RES_1);
+    send_nibble(CAP_NUM_LEDS);
+    send_bit(CAP_LED_TYPE_0);
 }
 
 // Send sensor data (normal exchange)

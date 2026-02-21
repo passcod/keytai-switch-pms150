@@ -33,20 +33,21 @@ All data is clocked on PA0 rising edges. PA5 carries bidirectional data.
 ### First Exchange: Capability Discovery
 
 ```
-Phase 1: Keyswitch → Controller (25 bits)
-  [4 clocks] Sync pattern (PA5 low)
-  [4 bits]   num_digital (MSB first) — number of digital outputs
-  [4 bits]   num_analog (MSB first) — number of analog outputs
-  [4 bits]   analog_resolution (MSB first) — bitwidth of analog values
-  [8 bits]   num_leds (MSB first) — number of LEDs
-  [1 bit]    led_type — 0 = monochrome (8-bit), 1 = RGB (24-bit)
+Phase 1: Keyswitch → Controller (variable length)
+  [4 clocks]    Sync pattern (PA5 low)
+  [4 bits]      num_digital (D) — number of digital outputs
+  [4 bits]      num_analog (A) — number of analog outputs
+  [4 bits × A]  analog_resolution — bitwidth per analog channel
+  [4 bits]      num_leds (L) — number of LEDs (max 15)
+  [1 bit × L]   led_type per LED — 0 = monochrome (8-bit), 1 = RGB (24-bit)
 
 Phase 2: Controller → Keyswitch (6 bits)
   [4 clocks] Sync pattern (PA5 low)
   [2 clocks] Command (must be 0b00 = skip for first exchange)
 ```
 
-For this device: num_digital=2, num_analog=2, analog_resolution=4, num_leds=1, led_type=1 (RGB).
+For this device: num_digital=2, num_analog=2, resolution=[4, 4], num_leds=1, led_type=[1 (RGB)].
+Total: 4 + 4+4 + 4+4 + 4 + 1 = 25 clocks.
 
 ### Subsequent Exchanges: Data Updates
 

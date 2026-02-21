@@ -30,9 +30,10 @@ architecture sim of test is
   -- Captured capabilities
   signal cap_num_digital  : std_logic_vector(3 downto 0) := "0000";
   signal cap_num_analog   : std_logic_vector(3 downto 0) := "0000";
-  signal cap_analog_res   : std_logic_vector(3 downto 0) := "0000";
-  signal cap_num_leds     : std_logic_vector(7 downto 0) := x"00";
-  signal cap_led_type     : std_logic := '0';
+  signal cap_analog_res_0 : std_logic_vector(3 downto 0) := "0000";
+  signal cap_analog_res_1 : std_logic_vector(3 downto 0) := "0000";
+  signal cap_num_leds     : std_logic_vector(3 downto 0) := "0000";
+  signal cap_led_type_0   : std_logic := '0';
   
   -- Test RGB colour to send (R, G, B)
   constant LED_R_TO_SEND : std_logic_vector(7 downto 0) := x"FF";
@@ -230,25 +231,33 @@ begin
       clock_low;
     end loop;
     
-    -- Receive analog_resolution (4 bits, MSB first)
+    -- Receive analog_resolution for channel 0 (4 bits, MSB first)
     for i in 3 downto 0 loop
       clock_high;
-      cap_analog_res(i) <= read_pa5(pa_s);
+      cap_analog_res_0(i) <= read_pa5(pa_s);
       clock_high_finish;
       clock_low;
     end loop;
     
-    -- Receive num_leds (8 bits, MSB first)
-    for i in 7 downto 0 loop
+    -- Receive analog_resolution for channel 1 (4 bits, MSB first)
+    for i in 3 downto 0 loop
+      clock_high;
+      cap_analog_res_1(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    
+    -- Receive num_leds (4 bits, MSB first)
+    for i in 3 downto 0 loop
       clock_high;
       cap_num_leds(i) <= read_pa5(pa_s);
       clock_high_finish;
       clock_low;
     end loop;
     
-    -- Receive led_type (1 bit)
+    -- Receive led_type for LED 0 (1 bit)
     clock_high;
-    cap_led_type <= read_pa5(pa_s);
+    cap_led_type_0 <= read_pa5(pa_s);
     clock_high_finish;
     clock_low;
     
@@ -261,13 +270,15 @@ begin
     report "--- CAP TEST Results ---";
     report "num_digital=" & integer'image(to_integer(unsigned(cap_num_digital)))
          & " num_analog=" & integer'image(to_integer(unsigned(cap_num_analog)))
-         & " resolution=" & integer'image(to_integer(unsigned(cap_analog_res)))
+         & " res_0=" & integer'image(to_integer(unsigned(cap_analog_res_0)))
+         & " res_1=" & integer'image(to_integer(unsigned(cap_analog_res_1)))
          & " num_leds=" & integer'image(to_integer(unsigned(cap_num_leds)))
-         & " led_type=" & std_logic'image(cap_led_type);
+         & " led_type_0=" & std_logic'image(cap_led_type_0);
     
     if unsigned(cap_num_digital) = 2 and unsigned(cap_num_analog) = 2
-       and unsigned(cap_analog_res) = 4 and unsigned(cap_num_leds) = 1
-       and cap_led_type = '1' then
+       and unsigned(cap_analog_res_0) = 4 and unsigned(cap_analog_res_1) = 4
+       and unsigned(cap_num_leds) = 1
+       and cap_led_type_0 = '1' then
       report "CAP TEST PASSED";
     else
       report "CAP TEST FAILED" severity warning;
