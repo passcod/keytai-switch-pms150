@@ -27,6 +27,13 @@ architecture sim of test is
   signal captured_btn1 : std_logic := '0';
   signal captured_btn2 : std_logic := '0';
   
+  -- Captured capabilities
+  signal cap_num_digital  : std_logic_vector(3 downto 0) := "0000";
+  signal cap_num_analog   : std_logic_vector(3 downto 0) := "0000";
+  signal cap_analog_res   : std_logic_vector(3 downto 0) := "0000";
+  signal cap_num_leds     : std_logic_vector(7 downto 0) := x"00";
+  signal cap_led_type     : std_logic := '0';
+  
   -- Test RGB colour to send (R, G, B)
   constant LED_R_TO_SEND : std_logic_vector(7 downto 0) := x"FF";
   constant LED_G_TO_SEND : std_logic_vector(7 downto 0) := x"80";
@@ -160,6 +167,22 @@ begin
       tb_pa5 <= 'Z';
     end procedure;
     
+    -- Send turn-off command (0b11) during phase 2
+    procedure send_off is
+    begin
+      -- Send sync pattern: drive PA5 low for 4 clock beats
+      tb_pa5 <= '0';
+      for i in 0 to 3 loop
+        pulse_clock;
+      end loop;
+      -- Send command 0b11 (turn off all LEDs)
+      tb_pa5 <= '1';
+      pulse_clock;
+      pulse_clock;
+      -- Release PA5
+      tb_pa5 <= 'Z';
+    end procedure;
+    
   begin
     -- Initialize
     tb_pa0 <= '0';
@@ -169,7 +192,89 @@ begin
     wait for 100 us;
     
     -- =========================================================
-    -- TEST 1: Wait for ready signal, then exchange
+    -- CAP TEST: Capability discovery (first exchange)
+    -- =========================================================
+    report "=== CAP TEST: Capability discovery ===";
+    
+    -- Wait for DUT to complete first sample cycle and signal ready
+    report "Waiting for PA5 ready signal...";
+    wait until read_pa5(pa_s) = '1' for 2000 us;
+    
+    if read_pa5(pa_s) /= '1' then
+      report "TIMEOUT waiting for ready signal" severity warning;
+      stop;
+    end if;
+    
+    -- Trigger capability exchange
+    pulse_clock;
+    wait for 50 us;
+    
+    -- Clock through sync (3 more beats)
+    for i in 0 to 2 loop
+      pulse_clock;
+    end loop;
+    
+    -- Receive num_digital (4 bits, MSB first)
+    for i in 3 downto 0 loop
+      clock_high;
+      cap_num_digital(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    
+    -- Receive num_analog (4 bits, MSB first)
+    for i in 3 downto 0 loop
+      clock_high;
+      cap_num_analog(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    
+    -- Receive analog_resolution (4 bits, MSB first)
+    for i in 3 downto 0 loop
+      clock_high;
+      cap_analog_res(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    
+    -- Receive num_leds (8 bits, MSB first)
+    for i in 7 downto 0 loop
+      clock_high;
+      cap_num_leds(i) <= read_pa5(pa_s);
+      clock_high_finish;
+      clock_low;
+    end loop;
+    
+    -- Receive led_type (1 bit)
+    clock_high;
+    cap_led_type <= read_pa5(pa_s);
+    clock_high_finish;
+    clock_low;
+    
+    -- Send skip during capability exchange
+    wait for 20 us;
+    send_skip;
+    wait for 200 us;
+    
+    -- Verify capabilities
+    report "--- CAP TEST Results ---";
+    report "num_digital=" & integer'image(to_integer(unsigned(cap_num_digital)))
+         & " num_analog=" & integer'image(to_integer(unsigned(cap_num_analog)))
+         & " resolution=" & integer'image(to_integer(unsigned(cap_analog_res)))
+         & " num_leds=" & integer'image(to_integer(unsigned(cap_num_leds)))
+         & " led_type=" & std_logic'image(cap_led_type);
+    
+    if unsigned(cap_num_digital) = 2 and unsigned(cap_num_analog) = 2
+       and unsigned(cap_analog_res) = 4 and unsigned(cap_num_leds) = 1
+       and cap_led_type = '1' then
+      report "CAP TEST PASSED";
+    else
+      report "CAP TEST FAILED" severity warning;
+    end if;
+    
+    -- =========================================================
+    -- TEST 1: Wait for ready signal, then exchange data
     -- =========================================================
     report "=== TEST 1: Wait for PA5 ready signal ===";
     
@@ -378,7 +483,7 @@ begin
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
     wait for 20 us;
-    send_rgb(LED_R_TO_SEND, LED_G_TO_SEND, LED_B_TO_SEND);
+    send_off;  -- Command 0b11: turn off all LEDs
     wait for 200 us;
     
     -- Check TEST 3 results

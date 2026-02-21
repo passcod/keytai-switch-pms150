@@ -30,25 +30,44 @@ When the controller triggers an exchange (rising edge on PA0), PA5 is immediatel
 
 All data is clocked on PA0 rising edges. PA5 carries bidirectional data.
 
+### First Exchange: Capability Discovery
+
 ```
-Phase 1: Keyswitch → Controller (14 bits)
+Phase 1: Keyswitch → Controller (25 bits)
   [4 clocks] Sync pattern (PA5 low)
-  [4 clocks] coord_x (MSB first, 4 bits)
-  [4 clocks] coord_y (MSB first, 4 bits)
-  [1 clock]  btn1
-  [1 clock]  btn2
+  [4 bits]   num_digital (MSB first) — number of digital outputs
+  [4 bits]   num_analog (MSB first) — number of analog outputs
+  [4 bits]   analog_resolution (MSB first) — bitwidth of analog values
+  [8 bits]   num_leds (MSB first) — number of LEDs
+  [1 bit]    led_type — 0 = monochrome (8-bit), 1 = RGB (24-bit)
+
+Phase 2: Controller → Keyswitch (6 bits)
+  [4 clocks] Sync pattern (PA5 low)
+  [2 clocks] Command (must be 0b00 = skip for first exchange)
+```
+
+For this device: num_digital=2, num_analog=2, analog_resolution=4, num_leds=1, led_type=1 (RGB).
+
+### Subsequent Exchanges: Data Updates
+
+```
+Phase 1: Keyswitch → Controller (variable length)
+  [4 clocks] Sync pattern (PA5 low)
+  [R × A clocks] Analog values (R bits each, A channels, MSB first)
+  [D clocks] Digital values (1 bit each)
 
 Phase 2: Controller → Keyswitch (6 or 30 bits)
   [4 clocks] Sync pattern (PA5 low)
   [2 clocks] Command (MSB first):
-             0b00 = skip (no colour update, phase ends here)
-             0b01 = RGB colour follows
-  [8 clocks] Red (MSB first, 8 bits)    ─┐
-  [8 clocks] Green (MSB first, 8 bits)   ├─ only if command = 0b01
-  [8 clocks] Blue (MSB first, 8 bits)   ─┘
+             0b00 = skip (no LED update, phase ends here)
+             0b01 = data follows for each LED
+             0b10 = one data value, applied to all LEDs
+             0b11 = turn off all LEDs (no data follows)
+  [24 clocks] R, G, B (8 bits each, MSB first)  — only if command = 0b01 or 0b10
 ```
 
-Total: 20 clock pulses (skip) or 44 clock pulses (colour update).
+For this device: Phase 1 data = 4+4+1+1 = 10 bits, total 14 clocks.
+Commands 0b01 and 0b10 are equivalent (single LED).
 
 ## Timing Requirements
 
@@ -154,8 +173,9 @@ make clean    # Remove generated files
 
 ## Test Scenarios
 
-The testbench validates three scenarios:
+The testbench validates four scenarios:
 
-1. **Ready signal wait**: Change mock values, wait for PA5 high, exchange
-2. **Stale data poll**: Poll without PA5 high, verify cached values returned
-3. **Value change detection**: Change mock values, verify PA5 goes high, verify new values
+1. **Capability discovery**: First exchange returns device capabilities (num_digital, num_analog, resolution, num_leds, led_type)
+2. **Ready signal wait**: Change mock values, wait for PA5 high, exchange data with RGB colour
+3. **Stale data poll**: Poll without PA5 high, verify cached values returned (skip command)
+4. **Value change + LED off**: Change mock values, verify PA5 goes high, verify new values, send turn-off command (0b11)

@@ -29,7 +29,15 @@ __sfr __at(0x19) gpcs;      // comparator select
 #define PIN_COMPN_Y 6       // PA6 - comparator- for coord_y
 #define PIN_COMPN_B 4       // PA4 - comparator- for buttons
 
+// === Device capabilities (hardcoded) ===
+#define CAP_NUM_DIGITAL  2    // btn1, btn2
+#define CAP_NUM_ANALOG   2    // coord_x, coord_y
+#define CAP_ANALOG_RES   4    // 4-bit SAR
+#define CAP_NUM_LEDS     1    // Single WS2812
+#define CAP_LED_TYPE     1    // 0=mono (8-bit), 1=RGB (24-bit)
+
 // === Cached values (updated in main loop) ===
+volatile uint8_t capabilities_sent;
 volatile uint8_t coord_x;
 volatile uint8_t coord_y;
 volatile uint8_t btn1;
@@ -162,9 +170,60 @@ static void send_sync(void) {
     }
 }
 
+// Send a 4-bit nibble MSB first
+static void send_nibble(uint8_t val) {
+    uint8_t mask = 0x08;
+    while (mask) {
+        send_bit((val & mask) ? 1 : 0);
+        mask >>= 1;
+    }
+}
+
+// Send an 8-bit byte MSB first
+static void send_byte(uint8_t val) {
+    uint8_t mask = 0x80;
+    while (mask) {
+        send_bit((val & mask) ? 1 : 0);
+        mask >>= 1;
+    }
+}
+
+// Receive an 8-bit byte MSB first
+static uint8_t recv_byte(void) {
+    uint8_t val = 0;
+    uint8_t i;
+    for (i = 0; i < 8; i++) val = (val << 1) | recv_bit();
+    return val;
+}
+
+// Send device capabilities (first exchange only)
+static void send_capabilities(void) {
+    send_nibble(CAP_NUM_DIGITAL);
+    send_nibble(CAP_NUM_ANALOG);
+    send_nibble(CAP_ANALOG_RES);
+    send_byte(CAP_NUM_LEDS);
+    send_bit(CAP_LED_TYPE);
+}
+
+// Send sensor data (normal exchange)
+static void send_data(void) {
+    send_nibble(coord_x);
+    send_nibble(coord_y);
+    send_bit(btn1);
+    send_bit(btn2);
+}
+
+// Receive LED colour data (24-bit RGB)
+static void recv_led_rgb(void) {
+    led_r = recv_byte();
+    led_g = recv_byte();
+    led_b = recv_byte();
+    led_update = 1;
+}
+
 // === Protocol handler (called from ISR) ===
 static void protocol_exchange(void) {
-    uint8_t i;
+    uint8_t cmd;
     
     // PA5 is already output mode (set in init), just make sure it's low
     pa &= ~(1 << PIN_DATA);
@@ -172,19 +231,13 @@ static void protocol_exchange(void) {
     // Send sync (4 beats low)
     send_sync();
     
-    // Send coord_x (4 bits, MSB first)
-    for (i = 0; i < 4; i++) {
-        send_bit((coord_x >> (3 - i)) & 1);
+    if (!capabilities_sent) {
+        send_capabilities();
+        capabilities_sent = 1;
+        coord_x = 0xFF;  // Force change detection on next main loop pass
+    } else {
+        send_data();
     }
-    
-    // Send coord_y (4 bits, MSB first)
-    for (i = 0; i < 4; i++) {
-        send_bit((coord_y >> (3 - i)) & 1);
-    }
-    
-    // Send btn1, btn2
-    send_bit(btn1);
-    send_bit(btn2);
     
     // Switch PA5 to input for reception
     pac &= ~(1 << PIN_DATA);
@@ -194,24 +247,17 @@ static void protocol_exchange(void) {
     while (!detect_sync());
     
     // Receive 2-bit command (MSB first)
-    uint8_t cmd = (recv_bit() << 1) | recv_bit();
+    cmd = (recv_bit() << 1) | recv_bit();
     
-    if (cmd == 0x01) {
-        // 0b01: RGB colour follows (24 bits, MSB first, R then G then B)
+    if (cmd == 0x01 || cmd == 0x02) {
+        // 0b01: data for each LED, 0b10: one data for all LEDs
+        // For single LED, both are equivalent
+        recv_led_rgb();
+    } else if (cmd == 0x03) {
+        // 0b11: turn off all LEDs
         led_r = 0;
-        for (i = 0; i < 8; i++) {
-            led_r = (led_r << 1) | recv_bit();
-        }
         led_g = 0;
-        for (i = 0; i < 8; i++) {
-            led_g = (led_g << 1) | recv_bit();
-        }
         led_b = 0;
-        for (i = 0; i < 8; i++) {
-            led_b = (led_b << 1) | recv_bit();
-        }
-        
-        // Signal main loop to update WS2812 LED
         led_update = 1;
     }
     // 0b00: skip (no colour update)
@@ -278,6 +324,7 @@ void main(void) {
     led_g = 0;
     led_b = 0;
     led_update = 0;
+    capabilities_sent = 0;
     
     // Send initial WS2812 reset (LED off)
     __asm__("disgint");
