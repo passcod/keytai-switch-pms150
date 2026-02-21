@@ -45,7 +45,8 @@ Phase 1: Keyswitch → Controller (variable length)
   [4 bits]      num_leds (L) — number of LEDs (max 15)
   [1 bit × L]   led_type per LED — 0 = monochrome (8-bit), 1 = RGB (24-bit)
 
-Phase 2: Controller → Keyswitch (6 bits)
+Phase 2: Controller → Keyswitch (12 or 36 bits)
+  [2 clocks] Preamble (PA5 high) — keyswitch switches to input
   [4 clocks] Sync pattern (PA5 low)
   [2 clocks] Command (must be 0b00 = skip for first exchange)
 ```
@@ -61,7 +62,8 @@ Phase 1: Keyswitch → Controller (variable length)
   [R × A clocks] Analog values (R bits each, A channels, MSB first)
   [D clocks] Digital values (1 bit each)
 
-Phase 2: Controller → Keyswitch (6 or 30 bits)
+Phase 2: Controller → Keyswitch (8 or 32 clocks)
+  [2 clocks] Preamble (PA5 high) — keyswitch switches to input
   [4 clocks] Sync pattern (PA5 low)
   [2 clocks] Command (MSB first):
              0b00 = skip (no LED update, phase ends here)
@@ -95,8 +97,8 @@ Commands 0b01 and 0b10 are equivalent (single LED).
 
 | Parameter | Min | Notes |
 |-----------|-----|-------|
-| Trigger to first sync | 0 µs | Trigger pulse counts as first sync clock |
-| After keyswitch data, before controller sync | 20 µs | Keyswitch needs time to switch PA5 to input |
+| Trigger to first length bit | 0 µs | Trigger pulse counts as first length clock |
+| After keyswitch data, before preamble | 0 µs | Controller drives PA5 high immediately; 2-clock preamble gives keyswitch time to switch to input |
 | After controller data, before next exchange | 100 µs | Keyswitch needs time to process LED value |
 
 ### SAR ADC Timing

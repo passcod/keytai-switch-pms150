@@ -124,6 +124,10 @@ begin
     -- Send 24-bit RGB colour (R, G, B) during phase 2 with command 0b01
     procedure send_rgb(r, g, b : std_logic_vector(7 downto 0)) is
     begin
+      -- High preamble: gives keyswitch time to switch PA5 to input
+      tb_pa5 <= '1';
+      pulse_clock;
+      pulse_clock;
       -- Send sync pattern: drive PA5 low for 4 clock beats
       tb_pa5 <= '0';
       for i in 0 to 3 loop
@@ -156,6 +160,10 @@ begin
     -- Send skip command (no colour update) during phase 2
     procedure send_skip is
     begin
+      -- High preamble: gives keyswitch time to switch PA5 to input
+      tb_pa5 <= '1';
+      pulse_clock;
+      pulse_clock;
       -- Send sync pattern: drive PA5 low for 4 clock beats
       tb_pa5 <= '0';
       for i in 0 to 3 loop
@@ -172,6 +180,10 @@ begin
     -- Send turn-off command (0b11) during phase 2
     procedure send_off is
     begin
+      -- High preamble: gives keyswitch time to switch PA5 to input
+      tb_pa5 <= '1';
+      pulse_clock;
+      pulse_clock;
       -- Send sync pattern: drive PA5 low for 4 clock beats
       tb_pa5 <= '0';
       for i in 0 to 3 loop
@@ -275,7 +287,6 @@ begin
     clock_low;
     
     -- Send skip during capability exchange
-    wait for 20 us;
     send_skip;
     wait for 200 us;
     
@@ -355,7 +366,6 @@ begin
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
     -- Now DUT switches PA5 to input mode for reception
-    wait for 20 us;
     
     -- Send RGB colour (24 bits: R, G, B)
     send_rgb(LED_R_TO_SEND, LED_G_TO_SEND, LED_B_TO_SEND);
@@ -421,7 +431,6 @@ begin
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
     -- Complete phase 2 with skip (no colour update)
-    wait for 20 us;
     send_skip;
     report "TEST 2 skip command sent";
     wait for 500 us;  -- Give DUT time to finish ISR
@@ -488,7 +497,6 @@ begin
     
     report "Captured btn1=" & std_logic'image(captured_btn1) & " btn2=" & std_logic'image(captured_btn2);
     
-    wait for 20 us;
     send_off;  -- Command 0b11: turn off all LEDs
     wait for 200 us;
     
